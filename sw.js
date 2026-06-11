@@ -1,6 +1,6 @@
 /* Evolve service worker — offline app shell caching.
    Bump CACHE when you change index.html so phones pick up the new version. */
-const CACHE = "evolve-v3-11";
+const CACHE = "evolve-v3-17";
 const SHELL = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", (e) => {
