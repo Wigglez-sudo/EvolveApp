@@ -1,0 +1,114 @@
+# Evolve — Gym & Nutrition
+
+**Train smarter · Become next.**
+
+Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
+
+It installs to your home screen on both **iPhone/iPad** and **Android** and works like a native app, fully offline.
+
+---
+
+## How Evolve was built
+
+Evolve was created and directed by **Wigglez** — the ideas, the vision, the feature list, the design decisions, and the relentless on-device testing all came from one person who wanted a fitness app that actually worked the way they think.
+
+The code itself was written in partnership with **Claude** (Anthropic's AI assistant). Wigglez described what Evolve should do and how it should feel, tested every build on real Apple and Android hardware, sent back screenshots and feedback, and drove each round of changes; Claude turned those ideas into the working app, one feature at a time.
+
+That back-and-forth — a clear human vision plus an AI build partner — is how Evolve grew from a single idea into the app in this repository. Every screen exists because someone using it asked for it.
+
+---
+
+## Privacy first — by design
+
+Evolve was built to be genuinely private. There is no clever fine print here:
+
+- **Your data stays on your device.** Everything — workouts, food, weight, settings — is saved in your phone's local storage. It never touches a server, because there is no server.
+- **No account, no sign-up, no email.** You open it and use it. Nothing to register.
+- **No cloud, no syncing, no tracking.** Evolve does not phone home, run analytics, fingerprint you, or send your information anywhere.
+- **No ads.** None, ever.
+- **Works fully offline.** After the first visit it runs with no internet at all.
+- **You own your data.** Export a **backup code** any time (More → Backup & restore) and import it on another device. That code is the only copy that ever leaves your phone, and only when *you* choose to share it.
+
+Because your data lives only on your device, the one thing to remember is: **export a backup code and keep it somewhere safe** (your Notes, or email it to yourself). If you delete the app or switch phones without a backup, the data goes with it. Evolve reminds you of this on first run.
+
+---
+
+## Features
+
+- **Home dashboard** — a daily hub that adapts to your plan: start today's session, see your week, your fuel snapshot, streaks, and a quick bodyweight log.
+- **Workout library** — muscle-group builders with sub-muscle focus, ready-made preset days, a "Mega" multi-group session, home/bodyweight routines, and saved favourites.
+- **Live tracker** — a full-screen, distraction-free workout screen with set logging, rest timer (with beep + flash), warm-up generator, plate calculator, supersets, and per-exercise swaps.
+- **Weekly planner** — tick the days you train and Evolve builds a balanced split with coaching advice, rest days, and bonus sessions.
+- **Fuel (nutrition)** — calorie ring, protein/carbs/fat rings, water tracking, a 700+ food database, and your own custom foods.
+  - Log into **Breakfast / Lunch / Dinner / Snacks**, with optional times.
+  - **Recent & frequent foods** for one-tap re-logging, **favourite foods (★)**, and **repeat a meal** from another day.
+- **Progress** — bodyweight trend, lifting volume, estimated 1-rep-max, a training calendar, and streaks.
+- **Themes** — recolour the whole app with one tap.
+- **Built-in help** — a "How this page works" button on every tab explains what it does and how to use it.
+- **Backup & restore** — portable export/import codes so your data is yours to move.
+
+---
+
+## How it's made (technical)
+
+Evolve is deliberately simple under the hood:
+
+- **One self-contained file.** The entire app is a single `index.html` — HTML, CSS, and vanilla JavaScript. No frameworks, no build step, no dependencies, no package manager.
+- **Local storage** holds all state as JSON on the device.
+- **PWA** — a `manifest.json` and a service worker (`sw.js`) make it installable and fully offline.
+- **Hosted free on GitHub Pages** as a static site. Nothing runs on a backend because there is no backend.
+
+### Files in this repo
+
+| File | What it is |
+|------|------------|
+| `index.html` | The entire app |
+| `manifest.json` | App name, icons, and install settings (icons are embedded) |
+| `sw.js` | Service worker — offline caching |
+| `EVOLVE_MASTER_GUIDE.txt` | Step-by-step deploy + install + checks guide |
+| `EVOLVE_HANDOFF.txt` | Developer notes / project history |
+| `LICENSE` | MIT license (free to reuse with credit) |
+| `README.md` | This file |
+
+---
+
+## Install it
+
+Open the published link in your phone's browser:
+
+- **iPhone / iPad (Safari):** Share button → **Add to Home Screen** → Add. *(iPhones never show an install pop-up — Add to Home Screen is the install.)*
+- **Android (Chrome):** tap **Install** on the banner, or **⋮ → Install app / Add to Home screen**.
+
+After the first online visit it works completely offline. Full step-by-step instructions are in **`EVOLVE_MASTER_GUIDE.txt`**.
+
+---
+
+## Updates
+
+New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
+
+---
+
+## License
+
+Evolve is released under the **MIT License** — see [`LICENSE`](LICENSE).
+
+In plain English: **you are free to use, copy, modify, and share the code, including in your own projects** — commercial or not. The one condition is simple: **keep the credit.** Leave the copyright line (© 2026 Wigglez) in any copy or substantial portion you reuse, so the original work is acknowledged. That's it.
+
+---
+
+## ⚠️ Health & safety disclaimer
+
+**Evolve is a personal tracking tool, not a medical device, and nothing in it is medical, dietary, or professional fitness advice.**
+
+- All calorie targets, macro targets, calorie-burn figures, and estimated one-rep-max numbers are **estimates** generated by simple formulas. They can be wrong for your body and your goals.
+- Evolve does not know your medical history. It cannot account for injuries, conditions, medications, pregnancy, allergies, or other personal factors.
+- **Always consult a qualified healthcare professional, doctor, dietitian, or certified trainer** before starting, changing, or stopping any exercise or nutrition programme.
+- Listen to your body. Stop and seek medical advice if you feel unwell, dizzy, or in pain.
+- You use Evolve, and act on anything it suggests, **at your own risk.** The creator and contributors accept no liability for any outcome — see the warranty notice in [`LICENSE`](LICENSE).
+
+If you have a medical condition or any doubt, talk to a professional before relying on this app.
+
+---
+
+*Created by Wigglez · Built with Claude · Licensed under MIT · © 2026*
