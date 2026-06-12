@@ -714,8 +714,13 @@ function updateHeader(){
   const h=new Date().getHours();
   const part = h<5?"Late night grind":h<12?"Good morning":h<17?"Good afternoon":h<21?"Good evening":"Night moves";
   $("#helloTxt").textContent = name?`${part}, ${name} 👋`:part+" 👋";
-  $("#avInit").textContent = (name?name[0]:"E").toUpperCase();
-  if(!$("#avInit")._wired){ $("#avInit")._wired=1; $("#avInit").style.cursor="pointer"; $("#avInit").addEventListener("click",()=>switchTab("more")); }
+  const av=$("#avInit");
+  if(av){
+    av.classList.add("brand-av");
+    av.innerHTML='<img src="icon-192.png" alt="Evolve logo">';
+    av.setAttribute("aria-label","Open settings");
+    if(!av._wired){ av._wired=1; av.style.cursor="pointer"; av.addEventListener("click",()=>switchTab("more")); }
+  }
   $("#dateTxt").textContent = prettyDate(todayISO());
 }
 
@@ -3623,9 +3628,10 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.24-test";
+const LATEST_NUM="3.25-test";
 const LATEST_TITLE="Test package: help toggle & Fuel polish";
 const LATEST_ITEMS=[
+  "<b>Brand refresh</b> — Evolve now uses the new gradient <b>E</b> logo on the splash screen, in the app chrome and for installable mobile icons.",
   "<b>Test package</b> — this is a v3.24 test build, not a declared final release. Use it, check it, and expect small tweaks.",
   "<b>Show help bars</b> — More → Preferences now has a <b>Show help bars</b> toggle so experienced users can hide or re-enable the &quot;How this page works&quot; bars across the main tabs.",
   "<b>Fuel edit polish</b> — the Goal & activity edit link now uses a pencil marker instead of the lonely dot above <b>edit</b>.",
@@ -3846,7 +3852,7 @@ function renderMore(){
   /* ---- profile header (gives the tab a face + theme colour) ---- */
   const initial=(p&&p.name?p.name.trim().charAt(0):"E").toUpperCase()||"E";
   const ph=el("div","more-prof");
-  ph.innerHTML=`<div class="more-av">${esc(initial)}</div>
+  ph.innerHTML=`<div class="more-av logo"><img src="icon-192.png" alt="Evolve logo"></div>
     <div class="more-prof-main">
       <div class="more-prof-name">${p?esc(p.name||"Your profile"):"Set up profile"}</div>
       <div class="more-prof-sub">${p?`${p.age||"—"}y · ${p.heightCm||"—"}cm · ${bodyStr(p.weightKg)} · ${GOALS[p.goal]?.l||"—"}`:"Tap edit to add your details"}</div>
@@ -4088,7 +4094,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.24-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.25-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
 function openExport(){

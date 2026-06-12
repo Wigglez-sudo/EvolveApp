@@ -2,6 +2,8 @@
 
 **Train smarter · Become next.**
 
+> Current test package: **v3.25-test** — includes the new gradient **E** app icon / branding refresh.
+
 Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
 
 It installs to your home screen on both **iPhone/iPad** and **Android** and works like a native app, fully offline.
@@ -69,7 +71,7 @@ Evolve is deliberately simple under the hood:
 | `manifest.json` | App name, icons, and install settings (icons are embedded) |
 | `sw.js` | Service worker — offline caching |
 | `EVOLVE_HANDOFF.txt` | Developer notes / project history |
-| `Evolve-v3.24-test-preview.html` | Single-file preview build for testing |
+| `Evolve-v3.25-test-preview.html` | Single-file preview build for testing |
 | `evolve_code.txt` | Combined source snapshot/reference dump |
 | `LICENSE` | MIT license (free to reuse with credit) |
 | `README.md` | This file |

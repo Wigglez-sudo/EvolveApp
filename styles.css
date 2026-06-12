@@ -48,7 +48,8 @@ a{color:var(--fuel)}
 .splash-news-body{display:none;width:100%;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px;margin:-4px 0 8px;text-align:left;font-size:12.5px;line-height:1.6;color:var(--muted);max-height:40vh;overflow:auto}
 .splash-news-body.open{display:block}
 .splash-news-body b{color:var(--text)}
-.splash-mark{font-size:clamp(64px,19vw,116px);letter-spacing:.04em;line-height:1;max-width:100%;
+.splash-logo-img{width:min(40vw,168px);height:auto;display:block;margin:0 auto 14px;border-radius:28px;box-shadow:0 18px 44px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08)}
+.splash-mark{font-size:clamp(52px,16vw,94px);letter-spacing:.04em;line-height:1;max-width:100%;
   background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;color:transparent}
 .splash-tag{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:.22em;color:var(--muted);margin-top:6px}
 .splash-feats{display:flex;flex-direction:column;gap:10px;width:100%;margin:30px 0 34px}
@@ -632,3 +633,8 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 
 /* v3.24-test additions */
 .fuel-edit-link{font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+
+.av.brand-av{width:42px;height:42px;padding:0;border-radius:14px;background:rgba(255,255,255,.06);box-shadow:0 10px 24px rgba(0,0,0,.32);overflow:hidden}
+.av.brand-av img{width:100%;height:100%;display:block;border-radius:14px}
+.more-av.logo{width:58px;height:58px;border-radius:16px;background:transparent;box-shadow:0 12px 26px rgba(0,0,0,.28);padding:0;overflow:hidden}
+.more-av.logo img{width:100%;height:100%;display:block;border-radius:16px}
