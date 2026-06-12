@@ -573,3 +573,12 @@ svg.chart{width:100%;height:auto;display:block}
 .divider{height:1px;background:var(--line);margin:18px 0}
 hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 ::-webkit-scrollbar{width:0;height:0}
+
+/* v3.19 — expandable saved-workout rows */
+.fav-wrap+.fav-wrap{border-top:1px solid var(--line)}
+.fav-caret{display:inline-block;transition:transform .2s;color:var(--muted);font-size:11px}
+.fav-wrap.open .fav-caret{transform:rotate(180deg)}
+.fav-exlist{max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0 4px}
+.fav-wrap.open .fav-exlist{max-height:480px;padding:2px 4px 10px}
+.fav-exrow{display:flex;align-items:center;gap:9px;padding:7px 6px;font-size:13.5px;color:var(--text);border-top:1px solid var(--line)}
+.fav-exn{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;border-radius:6px;background:var(--line2);color:var(--muted);font-size:11px;font-weight:700;flex:0 0 auto}
