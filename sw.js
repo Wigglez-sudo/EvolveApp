@@ -1,6 +1,6 @@
 /* Evolve service worker — offline app shell caching.
    Bump CACHE whenever you change ANY of the shell files so phones pick up the new version. */
-const CACHE = "evolve-v3-32-test";
+const CACHE = "evolve-v3-34-test";
 const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon.png"];
 
 self.addEventListener("install", (e) => {
@@ -48,5 +48,16 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
       .catch(() => caches.match(req))
+  );
+});
+
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) { if ("focus" in w) return w.focus(); }
+      if (clients.openWindow) return clients.openWindow("./");
+    })
   );
 });

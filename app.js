@@ -108,6 +108,7 @@ function cardioDistanceKm(name, seconds){
 
 /* ===================== STATE & STORAGE ===================== */
 const KEY="evolve_v1";
+const PROFILE_PHOTO_KEY="evolve_profile_photo_v1"; /* separate local-only photo; deliberately not included in backup codes */
 const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
@@ -125,7 +126,7 @@ const DEFAULT_DATA = {
   weights:[],   /* {date,kg} */
   ach:{workoutsDone:0,totalVolume:0,streak:0,bestStreak:0,lastWorkoutDate:null,prs:{},unlocked:[]},
   statResets:{}, /* per-stat user resets: key -> {start, since} (prs: {since}) */
-  meta:{lastBackup:null, created:null}
+  meta:{lastBackup:null, created:null, backupReminder:"weekly", backupNotifications:false, backupNotifyLast:null, driveEnabled:false, driveClientId:"", driveFileId:null, lastDriveBackup:null}
 };
 let DATA = load();
 function load(){
@@ -150,7 +151,15 @@ function migrate(d){
   if(!["home","train","fuel","stats","more"].includes(d.prefs.startTab)) d.prefs.startTab="home"; /* tab shown on open */
   if(typeof d.prefs.showHelpBars!=="boolean") d.prefs.showHelpBars=true; /* show the per-tab "How this page works" bars by default */
   if(!d.statResets || typeof d.statResets!=="object") d.statResets={};
+  if(!d.meta || typeof d.meta!=="object") d.meta={};
+  if(!["off","daily","weekly","biweekly","monthly"].includes(d.meta.backupReminder)) d.meta.backupReminder="weekly";
+  if(typeof d.meta.backupNotifications!=="boolean") d.meta.backupNotifications=false;
+  if(typeof d.meta.driveEnabled!=="boolean") d.meta.driveEnabled=false;
+  if(typeof d.meta.driveClientId!=="string") d.meta.driveClientId="";
+  if(typeof d.meta.driveFileId!=="string") d.meta.driveFileId=null;
+  if(typeof d.meta.lastDriveBackup!=="string") d.meta.lastDriveBackup=null;
 }
+
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DATA));}catch(e){toast("Storage full or blocked");}}
 
 /* ===================== THEMES ===================== */
@@ -292,6 +301,66 @@ const $=s=>document.querySelector(s);
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 function toast(msg){const t=$("#toast");t.classList.remove("has-undo");t.textContent=msg;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2200);}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+function getProfilePhoto(){
+  try{return localStorage.getItem(PROFILE_PHOTO_KEY)||"";}catch(e){return "";}
+}
+function setProfilePhoto(v){
+  try{localStorage.setItem(PROFILE_PHOTO_KEY,v);return true;}catch(e){return false;}
+}
+function clearProfilePhoto(){
+  try{localStorage.removeItem(PROFILE_PHOTO_KEY);}catch(e){}
+}
+function profileAvatarHTML(){
+  const src=getProfilePhoto()||"icon-192.png";
+  return `<img src="${esc(src)}" alt="${getProfilePhoto()?"Profile photo":"Evolve logo"}">`;
+}
+function openProfilePhotoPrivacy(){
+  openModal(`<h3>Profile picture privacy</h3>
+    <p class="muted" style="line-height:1.55;margin:0 0 12px">Your profile picture stays <b style="color:var(--text)">fully local</b> on this device. It is never uploaded, synced, sent to GitHub, or shared with anyone.</p>
+    <p class="muted" style="line-height:1.55;margin:0 0 14px">To keep backup codes small, the photo is <b style="color:var(--text)">not included</b> in backups. If you delete the app, clear browser data, or reset Evolve, the photo is lost and you can choose it again later.</p>
+    <button class="btn str block" id="pp_choose">I understand — choose photo</button>
+    <button class="btn ghost block" id="pp_cancel" style="margin-top:10px">Cancel</button>`);
+  $("#pp_choose").addEventListener("click",()=>{ chooseProfilePhoto(); closeModal(); });
+  $("#pp_cancel").addEventListener("click",closeModal);
+}
+function chooseProfilePhoto(){
+  const input=document.createElement("input");
+  input.type="file"; input.accept="image/*"; input.style.position="fixed"; input.style.left="-9999px";
+  document.body.appendChild(input);
+  input.addEventListener("change",()=>{
+    const file=input.files&&input.files[0]; input.remove();
+    if(!file)return;
+    if(!/^image\//.test(file.type||"")){toast("Choose an image file");return;}
+    resizeAndSaveProfilePhoto(file);
+  },{once:true});
+  input.click();
+}
+function resizeAndSaveProfilePhoto(file){
+  const reader=new FileReader();
+  reader.onerror=()=>toast("Couldn't read that photo");
+  reader.onload=()=>{
+    const img=new Image();
+    img.onerror=()=>toast("Couldn't load that photo");
+    img.onload=()=>{
+      const size=256;
+      const canvas=document.createElement("canvas"); canvas.width=size; canvas.height=size;
+      const ctx=canvas.getContext("2d");
+      const side=Math.min(img.width,img.height);
+      const sx=Math.max(0,(img.width-side)/2), sy=Math.max(0,(img.height-side)/2);
+      ctx.fillStyle="#0C0D11"; ctx.fillRect(0,0,size,size);
+      ctx.drawImage(img,sx,sy,side,side,0,0,size,size);
+      const data=canvas.toDataURL("image/jpeg",0.82);
+      if(!setProfilePhoto(data)){toast("Photo couldn't be saved locally");return;}
+      updateHeader();
+      if($("#view-more")&&$("#view-more").classList.contains("active")) renderMore();
+      toast("Profile picture saved locally");
+    };
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
 /* modal system — every modal gets a sticky × close button and is dismissable
@@ -717,7 +786,7 @@ function updateHeader(){
   const av=$("#avInit");
   if(av){
     av.classList.add("brand-av");
-    av.innerHTML='<img src="icon-192.png" alt="Evolve logo">';
+    av.innerHTML=profileAvatarHTML();
     av.setAttribute("aria-label","Open settings");
     if(!av._wired){ av._wired=1; av.style.cursor="pointer"; av.addEventListener("click",()=>switchTab("more")); }
   }
@@ -3572,17 +3641,55 @@ function openLogWeight(){
 }
 
 /* ===================== MORE / SETTINGS ===================== */
-function maybeBackupBanner(container){
-  const created=DATA.meta.lastBackup||DATA.meta.created;
-  const days=created?Math.floor((Date.now()-new Date(created).getTime())/86400000):0;
-  const hasData=DATA.workouts.length||Object.keys(DATA.log).length;
-  if(hasData && days>=7){
-    const ban=el("div","banner");
-    ban.innerHTML=`<div style="font-size:22px">🛟</div><div class="bx"><b>Back up your data</b><br>It's been a while. Export a code so you never lose your progress.</div>`;
-    const go=el("button","btn sm gold","Backup"); go.addEventListener("click",()=>{switchTab("more");setTimeout(openExport,200);});
-    ban.appendChild(go); container.appendChild(ban);
-  }
+const BACKUP_REMINDER_DAYS={off:Infinity,daily:1,weekly:7,biweekly:14,monthly:30};
+function backupReminderLabel(v){return ({off:"Off",daily:"Daily",weekly:"Weekly",biweekly:"Biweekly",monthly:"Monthly"})[v]||"Weekly";}
+function backupHasData(){return !!(DATA.workouts.length||Object.keys(DATA.log||{}).length||DATA.weights.length||DATA.cardio.length);}
+function daysSinceBackup(){
+  const last=DATA.meta.lastBackup||DATA.meta.created;
+  if(!last) return 999;
+  const t=new Date(last).getTime(); if(!t) return 999;
+  return Math.max(0,Math.floor((Date.now()-t)/86400000));
 }
+function backupReminderDue(){
+  const freq=DATA.meta.backupReminder||"weekly";
+  const need=BACKUP_REMINDER_DAYS[freq];
+  return backupHasData() && isFinite(need) && daysSinceBackup()>=need;
+}
+function maybeBackupBanner(container){
+  if(!backupReminderDue()) return;
+  const freq=backupReminderLabel(DATA.meta.backupReminder).toLowerCase();
+  const ban=el("div","banner");
+  ban.innerHTML=`<div style="font-size:22px">🛟</div><div class="bx"><b>Backup reminder</b><br>Your ${freq} backup is due. Make a fresh encrypted or manual backup so you don't lose progress.</div>`;
+  const go=el("button","btn sm gold","Backup"); go.addEventListener("click",()=>{moreOpenSections.add("backup"); switchTab("more");});
+  ban.appendChild(go); container.appendChild(ban);
+}
+async function requestBackupNotifications(){
+  if(!("Notification" in window)){toast("Notifications are not available in this browser");return;}
+  let perm=Notification.permission;
+  if(perm==="default") perm=await Notification.requestPermission();
+  DATA.meta.backupNotifications=(perm==="granted"); save();
+  toast(perm==="granted"?"Backup notifications enabled":"Notifications not enabled");
+  if(perm==="granted") showBackupNotification(true);
+}
+async function showBackupNotification(test=false){
+  if(!("Notification" in window)){toast("Notifications are not available");return;}
+  let perm=Notification.permission;
+  if(perm==="default") perm=await Notification.requestPermission();
+  if(perm!=="granted"){DATA.meta.backupNotifications=false;save();toast("Notification permission is off");return;}
+  const title=test?"Evolve test backup reminder":"Evolve backup reminder";
+  const opts={body:test?"This is how your backup reminder will look.":"Your Evolve backup is due. Open Backup & restore to save an encrypted copy.",icon:"icon-192.png",badge:"icon-192.png",tag:"evolve-backup-reminder",renotify:true};
+  try{
+    if(navigator.serviceWorker&&navigator.serviceWorker.ready){const reg=await navigator.serviceWorker.ready; if(reg.showNotification){await reg.showNotification(title,opts); return;}}
+  }catch(e){}
+  try{new Notification(title,opts);}catch(e){toast("Couldn't show notification here");}
+}
+function checkBackupReminderOnOpen(){
+  if(!backupReminderDue()||DATA.meta.backupNotifications!==true) return;
+  if(DATA.meta.backupNotifyLast===todayISO()) return;
+  DATA.meta.backupNotifyLast=todayISO(); save();
+  setTimeout(()=>showBackupNotification(false),1200);
+}
+
 function detectOS(){
   const ua=navigator.userAgent||"";
   if(/iPhone|iPad|iPod/i.test(ua) || (navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)) return "ios";
@@ -3628,20 +3735,14 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.26-test";
-const LATEST_TITLE="Test package: help toggle & Fuel polish";
+const LATEST_NUM="3.28-test";
+const LATEST_TITLE="Test package: encrypted Drive backup & reminders";
 const LATEST_ITEMS=[
-  "<b>Centered icon fix</b> — all mobile / PWA icon assets were regenerated from the corrected centered logo so installs no longer look off-centre.",
-  "<b>Brand refresh</b> — Evolve now uses the new gradient <b>E</b> logo on the splash screen, in the app chrome and for installable mobile icons.",
-  "<b>Test package</b> — this is a v3.24 test build, not a declared final release. Use it, check it, and expect small tweaks.",
-  "<b>Show help bars</b> — More → Preferences now has a <b>Show help bars</b> toggle so experienced users can hide or re-enable the &quot;How this page works&quot; bars across the main tabs.",
-  "<b>Fuel edit polish</b> — the Goal & activity edit link now uses a pencil marker instead of the lonely dot above <b>edit</b>.",
-  "<b>Faster food logging</b> — common portion chips like <b>1 egg</b>, <b>1 slice</b> and <b>1 banana</b> sit above grams, with grams still there as the fallback.",
-  "<b>Smarter food search</b> — results now rank exact/prefix matches first and tolerate one-letter typos such as <b>chiken</b>.",
-  "<b>Repeat from history</b> — open a past workout in Progress and tap <b>↻ Do this workout again</b> to load it into the live tracker.",
-  "<b>Safer backup</b> — export can now copy the code or save/share it as a text file via the device share sheet where supported.",
-  "<b>Workout notes & history access</b> — add session notes during a workout, see notes in history, and tap an exercise name mid-workout to view recent best sets.",
-  "<b>Small fixes</b> — 150s rest chips are available in-session, Settings preferences are split into sub-sections, and the bodyweight trend uses date spacing."
+  "<b>Optional Google Drive backup</b> — off by default, warns twice before enabling, encrypts locally first, then uploads only the encrypted file to the user's own Drive.",
+  "<b>Encrypted backup files</b> — create and restore password-locked backup files without using Google Drive or any cloud provider.",
+  "<b>Backup reminders</b> — choose <b>Off</b>, <b>Daily</b>, <b>Weekly</b>, <b>Biweekly</b> or <b>Monthly</b>, with an in-app reminder and a <b>Send test notification</b> button.",
+  "<b>Drive restore</b> — sign into Google, download the encrypted Evolve backup, decrypt it locally with your password, and restore.",
+  "<b>Privacy guardrails</b> — Drive Client ID/file IDs stay local and are stripped from exported backup data. Profile photos remain excluded from backup files."
 ];
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
@@ -3853,7 +3954,7 @@ function renderMore(){
   /* ---- profile header (gives the tab a face + theme colour) ---- */
   const initial=(p&&p.name?p.name.trim().charAt(0):"E").toUpperCase()||"E";
   const ph=el("div","more-prof");
-  ph.innerHTML=`<div class="more-av logo"><img src="icon-192.png" alt="Evolve logo"></div>
+  ph.innerHTML=`<button class="more-av logo profile-photo-btn" id="profile_photo_card" aria-label="Change profile picture">${profileAvatarHTML()}</button>
     <div class="more-prof-main">
       <div class="more-prof-name">${p?esc(p.name||"Your profile"):"Set up profile"}</div>
       <div class="more-prof-sub">${p?`${p.age||"—"}y · ${p.heightCm||"—"}cm · ${bodyStr(p.weightKg)} · ${GOALS[p.goal]?.l||"—"}`:"Tap edit to add your details"}</div>
@@ -3861,6 +3962,7 @@ function renderMore(){
     <button class="btn sm" id="more_edit">Edit</button>`;
   b.appendChild(ph);
   $("#more_edit").addEventListener("click",()=>openSetup(false));
+  const photoBtn=$("#profile_photo_card"); if(photoBtn)photoBtn.addEventListener("click",openProfilePhotoPrivacy);
   maybeBackupBanner(b);
 
   /* ---- PROFILE ---- */
@@ -3869,7 +3971,13 @@ function renderMore(){
     pc.innerHTML=`<div class="lrow" style="padding-top:0"><div class="ico">👤</div><div class="main">
       <div class="t">${p?esc(p.name||"Your profile"):"Set up profile"}</div>
       <div class="s">${p?`${p.age||"—"}y · ${p.heightCm||"—"}cm · ${bodyStr(p.weightKg)} · ${GOALS[p.goal]?.l||"—"}`:"Tap to add your details"}</div></div></div>`;
-    const ed=el("button","btn block","Edit details & targets"); ed.style.marginTop="4px";
+    const pic=el("button","btn block","Choose profile picture"); pic.style.marginTop="4px";
+    pic.addEventListener("click",openProfilePhotoPrivacy); pc.appendChild(pic);
+    if(getProfilePhoto()){
+      const rm=el("button","btn ghost block","Remove profile picture"); rm.style.marginTop="10px";
+      rm.addEventListener("click",()=>{clearProfilePhoto();updateHeader();renderMore();toast("Profile picture removed");}); pc.appendChild(rm);
+    }
+    const ed=el("button","btn block","Edit details & targets"); ed.style.marginTop="10px";
     ed.addEventListener("click",()=>openSetup(false)); pc.appendChild(ed); body.appendChild(pc);
   }
 
@@ -4026,11 +4134,49 @@ function renderMore(){
 
   /* ---- BACKUP & RESTORE ---- */
   function buildBackup(body){
-    body.appendChild(el("p","tiny muted","Your data lives on this device only. Export a code, copy it, or save/share it as a small text file for safer backups.")).style.margin="0 0 12px";
+    const last=DATA.meta.lastBackup?prettyDate(DATA.meta.lastBackup):"Never";
+    const cloud=DATA.meta.driveEnabled;
+    body.appendChild(el("p","tiny muted","By default, Evolve stays local. Manual backups and optional Google Drive backups are user-controlled. Drive backups are encrypted on this device before upload." )).style.margin="0 0 12px";
+
+    const status=el("div","card"); status.style.marginBottom="12px";
+    status.innerHTML=`<div class="t" style="font-size:14.5px;font-weight:700">Backup status</div>
+      <div class="tiny muted" style="margin-top:6px;line-height:1.55">Last local/cloud backup: <b>${last}</b><br>Reminder: <b>${backupReminderLabel(DATA.meta.backupReminder)}</b>${DATA.meta.lastDriveBackup?`<br>Last Google Drive backup: <b>${new Date(DATA.meta.lastDriveBackup).toLocaleString()}</b>`:""}</div>`;
+    body.appendChild(status);
+
     const exb=el("button","btn block","Export backup code"); exb.addEventListener("click",openExport);
     const imb=el("button","btn block","Import / restore from code"); imb.style.marginTop="10px"; imb.addEventListener("click",openImport);
-    const tipsB=el("button","btn block","📲 Install & backup tips"); tipsB.style.marginTop="10px"; tipsB.addEventListener("click",openWelcomeFlow);
-    body.append(exb,imb,tipsB);
+    body.append(exb,imb);
+
+    const enc=el("div","card"); enc.style.marginTop="12px";
+    enc.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔐 Encrypted backup file</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Creates a password-locked backup before it leaves this device. Store it anywhere you like — Files, iCloud, Google Drive, Proton Drive, email, USB, etc.</p>`;
+    const encMake=el("button","btn block","Create encrypted backup file"); encMake.addEventListener("click",openEncryptedExport);
+    const encRestore=el("button","btn ghost block","Restore encrypted backup file"); encRestore.style.marginTop="10px"; encRestore.addEventListener("click",openEncryptedFileRestore);
+    enc.append(encMake,encRestore); body.appendChild(enc);
+
+    const drive=el("div","card"); drive.style.marginTop="12px";
+    drive.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">☁️ Optional Google Drive backup</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Off by default. When enabled, Evolve encrypts the backup locally, then uploads only the encrypted file to your own Google Drive. Evolve has no server and cannot read that file.</p>
+      <div class="tiny muted" style="margin-bottom:8px">Status: <b>${cloud?"Enabled":"Off"}</b></div>
+      <div class="field"><label>Google OAuth Client ID</label><input class="input" id="drv_client" value="${esc(DATA.meta.driveClientId||"")}" placeholder="Paste your Google client ID"></div>`;
+    const saveClient=el("button","btn ghost block","Save Client ID"); saveClient.addEventListener("click",()=>{DATA.meta.driveClientId=$("#drv_client").value.trim();save();toast("Google Client ID saved");renderMore();});
+    const toggleDrive=el("button",cloud?"btn danger block":"btn block",cloud?"Turn Google Drive backup off":"Enable Google Drive backup"); toggleDrive.style.marginTop="10px"; toggleDrive.addEventListener("click",cloud?disableDriveBackup:openDrivePrivacyWarning1);
+    const driveNow=el("button","btn str block","Backup now to Google Drive"); driveNow.style.marginTop="10px"; driveNow.disabled=!cloud; driveNow.addEventListener("click",openDriveBackupNow);
+    const driveRestore=el("button","btn ghost block","Restore from Google Drive"); driveRestore.style.marginTop="10px"; driveRestore.disabled=!cloud; driveRestore.addEventListener("click",openDriveRestore);
+    drive.append(saveClient,toggleDrive,driveNow,driveRestore); body.appendChild(drive);
+
+    const rem=el("div","card"); rem.style.marginTop="12px";
+    rem.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔔 Backup reminders</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve reminds you. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
+      <div class="seg" id="bk_freq" style="margin-bottom:10px">
+        ${[["off","Off"],["daily","Daily"],["weekly","Weekly"],["biweekly","Biweekly"],["monthly","Monthly"]].map(([v,l])=>`<button data-v="${v}" class="${(DATA.meta.backupReminder||"weekly")===v?"on":""}">${l}</button>`).join("")}
+      </div>`;
+    const notif=el("button","btn block",DATA.meta.backupNotifications?"Notifications enabled":"Enable backup notifications"); notif.addEventListener("click",requestBackupNotifications);
+    const test=el("button","btn ghost block","Send test notification"); test.style.marginTop="10px"; test.addEventListener("click",()=>showBackupNotification(true));
+    rem.append(notif,test); body.appendChild(rem);
+    rem.querySelectorAll("#bk_freq button").forEach(btn=>btn.addEventListener("click",()=>{DATA.meta.backupReminder=btn.dataset.v;save();renderMore();toast("Backup reminder: "+backupReminderLabel(btn.dataset.v));}));
+
+    const tipsB=el("button","btn block","📲 Install & backup tips"); tipsB.style.marginTop="12px"; tipsB.addEventListener("click",openWelcomeFlow); body.appendChild(tipsB);
   }
 
   /* ---- HELP & GUIDE ---- */
@@ -4095,11 +4241,153 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.26-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.28-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
+
+function cleanBackupData(){
+  const copy=JSON.parse(JSON.stringify(DATA));
+  if(copy.meta){
+    delete copy.meta.driveClientId; delete copy.meta.driveFileId; delete copy.meta.driveEnabled; delete copy.meta.lastDriveBackup; delete copy.meta.backupNotifyLast; delete copy.meta.backupNotifications;
+  }
+  return copy;
+}
+function backupCode(){return "EVOLVE1:"+btoa(unescape(encodeURIComponent(JSON.stringify(cleanBackupData()))));}
+function bytesToB64(bytes){let bin=""; const chunk=0x8000; for(let i=0;i<bytes.length;i+=chunk){bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));} return btoa(bin);}
+function b64ToBytes(b64){const bin=atob(b64); const out=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i); return out;}
+function backupCryptoReady(){return !!(window.crypto&&crypto.subtle&&window.TextEncoder&&window.TextDecoder);}
+async function deriveBackupKey(password,salt){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:210000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function makeEncryptedBackupText(password){
+  if(!backupCryptoReady()) throw new Error("Encryption is not available in this browser");
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveBackupKey(password,salt);
+  const plain=new TextEncoder().encode(JSON.stringify(cleanBackupData()));
+  const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,plain));
+  return JSON.stringify({type:"EVOLVE_ENCRYPTED_BACKUP",version:1,app:"Evolve",created:new Date().toISOString(),kdf:"PBKDF2-SHA256",iterations:210000,cipher:"AES-GCM",salt:bytesToB64(salt),iv:bytesToB64(iv),data:bytesToB64(cipher)},null,2);
+}
+async function decryptEncryptedBackupText(text,password){
+  const box=JSON.parse(text);
+  if(!box||box.type!=="EVOLVE_ENCRYPTED_BACKUP") throw new Error("not-evolve-encrypted");
+  const key=await deriveBackupKey(password,b64ToBytes(box.salt));
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64ToBytes(box.iv)},key,b64ToBytes(box.data));
+  const obj=JSON.parse(new TextDecoder().decode(plain));
+  if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad-backup");
+  return obj;
+}
+async function saveOrShareBlob(blob,name,title="Evolve backup",text="Evolve backup file"){
+  try{
+    if(navigator.share && typeof File!=="undefined"){
+      const file=new File([blob],name,{type:blob.type||"application/octet-stream"});
+      if(!navigator.canShare || navigator.canShare({files:[file]})){await navigator.share({title,text,files:[file]}); toast("Backup shared"); return;}
+    }
+  }catch(e){}
+  try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast("Backup file saved");}
+  catch(e){toast("Couldn't save file here");}
+}
+function openEncryptedExport(){
+  if(!backupCryptoReady()){toast("Encryption is not available in this browser");return;}
+  openModal(`<h3>Create encrypted backup</h3>
+    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">This creates a password-locked file on this device first. If you save/share it to cloud storage, only the encrypted file leaves Evolve. Do not lose the password — Evolve cannot recover it.</p>
+    <div class="field"><label>Password</label><input class="input" id="enc_pw" type="password" autocomplete="new-password" placeholder="Minimum 8 characters"></div>
+    <div class="field"><label>Repeat password</label><input class="input" id="enc_pw2" type="password" autocomplete="new-password"></div>
+    <button class="btn str block" id="enc_make">Create encrypted file</button>`);
+  $("#enc_make").addEventListener("click",async()=>{
+    const p=$("#enc_pw").value, p2=$("#enc_pw2").value;
+    if(p.length<8){toast("Use at least 8 characters");return;} if(p!==p2){toast("Passwords do not match");return;}
+    try{const text=await makeEncryptedBackupText(p); DATA.meta.lastBackup=todayISO(); save(); closeModal(); await saveOrShareBlob(new Blob([text],{type:"application/json"}),`evolve-encrypted-backup-${todayISO()}.json`,"Evolve encrypted backup","Encrypted Evolve backup");}
+    catch(e){toast("Couldn't create encrypted backup");}
+  });
+}
+function openEncryptedFileRestore(){
+  const input=document.createElement("input"); input.type="file"; input.accept="application/json,.json,.evolvebackup,.txt";
+  input.addEventListener("change",()=>{const f=input.files&&input.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>openEncryptedRestoreText(String(r.result||"")); r.readAsText(f);});
+  input.click();
+}
+function openEncryptedRestoreText(text){
+  openModal(`<h3>Restore encrypted backup</h3>
+    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">Enter the password for this encrypted backup. Restoring replaces all current Evolve data on this device.</p>
+    <div class="field"><label>Password</label><input class="input" id="dec_pw" type="password" autocomplete="current-password"></div>
+    <button class="btn danger-solid block" id="dec_go">Decrypt & restore</button>`);
+  $("#dec_go").addEventListener("click",async()=>{
+    try{const obj=await decryptEncryptedBackupText(text,$("#dec_pw").value); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
+    catch(e){toast("Couldn't decrypt — check the password/file");}
+  });
+}
+function openDrivePrivacyWarning1(){
+  openModal(`<h3>Optional Google Drive backup</h3>
+    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px"><b>Evolve is private and local by default.</b><br><br>If you turn this on, Evolve will create an encrypted backup file on this device first, then upload that encrypted file to your own Google Drive. The backup leaves this device and is stored by Google, not Evolve.</p>
+    <button class="btn str block" id="drv_w1">I understand — continue</button>
+    <button class="btn ghost block" id="drv_cancel" style="margin-top:10px">Cancel</button>`);
+  $("#drv_cancel").addEventListener("click",closeModal);
+  $("#drv_w1").addEventListener("click",openDrivePrivacyWarning2);
+}
+function openDrivePrivacyWarning2(){
+  openModal(`<h3>Final privacy check</h3>
+    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px">Evolve cannot read your encrypted backup without the password, but your encrypted file will be in Google Drive. Do not enable this if you want all backup files to stay only on this device.</p>
+    <button class="btn str block" id="drv_enable">Enable optional Drive backup</button>
+    <button class="btn ghost block" id="drv_cancel2" style="margin-top:10px">Keep it off</button>`);
+  $("#drv_cancel2").addEventListener("click",closeModal);
+  $("#drv_enable").addEventListener("click",()=>{DATA.meta.driveEnabled=true;save();closeModal();renderMore();toast("Google Drive backup enabled");});
+}
+function disableDriveBackup(){DATA.meta.driveEnabled=false; DATA.meta.driveFileId=null; save(); renderMore(); toast("Google Drive backup off");}
+const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
+function loadGoogleIdentity(){return new Promise((resolve,reject)=>{if(window.google&&google.accounts&&google.accounts.oauth2){resolve();return;} const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true; s.defer=true; s.onload=resolve; s.onerror=()=>reject(new Error("Google sign-in failed to load")); document.head.appendChild(s);});}
+async function getDriveToken(){
+  const clientId=(DATA.meta.driveClientId||"").trim(); if(!clientId) throw new Error("missing-client-id");
+  await loadGoogleIdentity();
+  return new Promise((resolve,reject)=>{try{const tc=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:DRIVE_SCOPE,callback:(r)=>{if(r&&r.access_token)resolve(r.access_token); else reject(new Error((r&&r.error)||"No token"));}}); tc.requestAccessToken({prompt:"consent"});}catch(e){reject(e);}});
+}
+async function driveUploadEncryptedText(text,token){
+  const boundary="evolve_"+Math.random().toString(36).slice(2);
+  const metadata={name:"evolve-encrypted-backup.json",mimeType:"application/json"};
+  const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${text}\r\n--${boundary}--`;
+  const id=DATA.meta.driveFileId;
+  const url=id?`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=multipart&fields=id,name,modifiedTime`:`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime`;
+  const res=await fetch(url,{method:id?"PATCH":"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"multipart/related; boundary="+boundary},body});
+  if(!res.ok && id){DATA.meta.driveFileId=null; save(); return driveUploadEncryptedText(text,token);}
+  if(!res.ok) throw new Error(await res.text());
+  const j=await res.json(); DATA.meta.driveFileId=j.id; DATA.meta.lastBackup=todayISO(); DATA.meta.lastDriveBackup=new Date().toISOString(); save(); return j;
+}
+function openDriveBackupNow(){
+  if(!DATA.meta.driveEnabled){openDrivePrivacyWarning1();return;}
+  if(!(DATA.meta.driveClientId||"").trim()){toast("Add your Google OAuth Client ID first");return;}
+  openModal(`<h3>Backup to Google Drive</h3>
+    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">Enter a password. Evolve encrypts the backup locally, then uploads the encrypted file to your Google Drive.</p>
+    <div class="field"><label>Encryption password</label><input class="input" id="drv_pw" type="password" autocomplete="new-password" placeholder="Minimum 8 characters"></div>
+    <button class="btn str block" id="drv_go">Encrypt & upload</button>`);
+  $("#drv_go").addEventListener("click",async()=>{
+    const p=$("#drv_pw").value; if(p.length<8){toast("Use at least 8 characters");return;}
+    try{closeModal(); toast("Signing in to Google…"); const token=await getDriveToken(); toast("Encrypting backup…"); const text=await makeEncryptedBackupText(p); toast("Uploading encrypted backup…"); await driveUploadEncryptedText(text,token); renderMore(); toast("Encrypted backup uploaded to Google Drive ✓");}
+    catch(e){toast(e.message==="missing-client-id"?"Add your Google Client ID first":"Google Drive backup failed");}
+  });
+}
+async function driveFindBackup(token){
+  if(DATA.meta.driveFileId) return DATA.meta.driveFileId;
+  const q=encodeURIComponent("name='evolve-encrypted-backup.json' and trashed=false");
+  const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name,modifiedTime)&pageSize=10`,{headers:{Authorization:`Bearer ${token}`}});
+  if(!res.ok) throw new Error("Drive file search failed");
+  const j=await res.json(); const f=(j.files||[]).sort((a,b)=>String(b.modifiedTime||"").localeCompare(String(a.modifiedTime||"")))[0];
+  if(!f) throw new Error("No Evolve backup found in Drive");
+  DATA.meta.driveFileId=f.id; save(); return f.id;
+}
+function openDriveRestore(){
+  if(!DATA.meta.driveEnabled){openDrivePrivacyWarning1();return;}
+  openModal(`<h3>Restore from Google Drive</h3>
+    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">This downloads your encrypted Evolve backup from Google Drive, then decrypts it on this device. Restoring replaces all current Evolve data.</p>
+    <div class="field"><label>Backup password</label><input class="input" id="drv_dec_pw" type="password" autocomplete="current-password"></div>
+    <button class="btn danger-solid block" id="drv_restore_go">Download, decrypt & restore</button>`);
+  $("#drv_restore_go").addEventListener("click",async()=>{
+    const pw=$("#drv_dec_pw").value;
+    try{closeModal(); toast("Signing in to Google…"); const token=await getDriveToken(); const id=await driveFindBackup(token); toast("Downloading encrypted backup…"); const res=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,{headers:{Authorization:`Bearer ${token}`}}); if(!res.ok)throw new Error("Download failed"); const text=await res.text(); const obj=await decryptEncryptedBackupText(text,pw); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); updateHeader(); switchTab("stats"); toast("Google Drive backup restored ✓");}
+    catch(e){toast("Restore failed — check Drive access and password");}
+  });
+}
 function openExport(){
-  const code="EVOLVE1:"+btoa(unescape(encodeURIComponent(JSON.stringify(DATA))));
+  const code=backupCode();
   DATA.meta.lastBackup=todayISO(); save();
   openModal(`<h3>Backup code</h3>
     <p class="tiny muted" style="margin-bottom:10px">This is a <b>snapshot of your data right now</b> (${prettyDate(todayISO())}). It won't update on its own — export a fresh backup after you log more. Copy the code, or use <b>Save / share file</b> for a safer phone backup.</p>
@@ -4144,7 +4432,7 @@ function openImport(){
       const obj=JSON.parse(decodeURIComponent(escape(atob(raw))));
       if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad");
       DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj);
-      save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
+      migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
     }catch(e){ toast("That code didn't work — check you copied all of it"); }
   });
 }
@@ -4195,6 +4483,7 @@ function renderSplashNews(){
 }
 renderSplashNews();
 updateHeader();
+checkBackupReminderOnOpen();
 
 /* ---- PWA: install prompt (Android/Chrome) + offline service worker ---- */
 let deferredInstall=null;

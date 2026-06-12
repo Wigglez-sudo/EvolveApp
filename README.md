@@ -2,7 +2,7 @@
 
 **Train smarter · Become next.**
 
-> Current test package: **v3.26-test** — includes the corrected centered gradient **E** app icon, refreshed mobile/PWA icons, and branding refresh.
+> Current test package: **v3.28-test** — adds optional encrypted Google Drive backup, encrypted backup files, backup reminders, and a test-notification button.
 
 Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
 
@@ -26,12 +26,12 @@ Evolve was built to be genuinely private. There is no clever fine print here:
 
 - **Your data stays on your device.** Everything — workouts, food, weight, settings — is saved in your phone's local storage. It never touches a server, because there is no server.
 - **No account, no sign-up, no email.** You open it and use it. Nothing to register.
-- **No cloud, no syncing, no tracking.** Evolve does not phone home, run analytics, fingerprint you, or send your information anywhere.
+- **No cloud by default, no tracking.** Evolve does not phone home, run analytics, fingerprint you, or send your information anywhere by default. Optional Google Drive backup is off by default and only uploads a password-encrypted backup file after you explicitly enable it.
 - **No ads.** None, ever.
 - **Works fully offline.** After the first visit it runs with no internet at all.
-- **You own your data.** Export a **backup code** any time (More → Backup & restore), copy it, or save/share it as a small text file. That backup is the only copy that ever leaves your phone, and only when *you* choose to share it.
+- **You own your data.** Export a **backup code** any time (More → Backup & restore), create a password-encrypted backup file, or optionally upload an encrypted file to your own Google Drive. Anything that leaves the phone happens only when *you* choose it.
 
-Because your data lives only on your device, the one thing to remember is: **export a backup code and keep it somewhere safe** (your Notes, or email it to yourself). If you delete the app or switch phones without a backup, the data goes with it. Evolve reminds you of this on first run.
+Because your data lives locally by default, the one thing to remember is: **export a backup code or encrypted backup and keep it somewhere safe**. If you delete the app or switch phones without a backup, the data goes with it. Evolve can remind you daily, weekly, biweekly, monthly, or not at all.
 
 ---
 
@@ -47,7 +47,7 @@ Because your data lives only on your device, the one thing to remember is: **exp
 - **Progress** — date-scaled bodyweight trend, lifting volume, estimated 1-rep-max, a training calendar, workout history with repeat-from-history, and streaks.
 - **Themes** — recolour the whole app with one tap.
 - **Built-in help** — a "How this page works" button on every main tab explains what it does and how to use it; experienced users can hide/re-enable those bars in More → Preferences.
-- **Backup & restore** — portable export/import codes plus Save/Share as a text file so your data is yours to move.
+- **Backup & restore** — portable export/import codes, password-encrypted backup files, optional encrypted Google Drive upload/restore, and backup reminders with a test notification button.
 
 ---
 
@@ -71,7 +71,7 @@ Evolve is deliberately simple under the hood:
 | `manifest.json` | App name, icons, and install settings (icons are embedded) |
 | `sw.js` | Service worker — offline caching |
 | `EVOLVE_HANDOFF.txt` | Developer notes / project history |
-| `Evolve-v3.26-test-preview.html` | Single-file preview build for testing |
+| `Evolve-v3.28-test-preview.html` | Single-file preview build for testing |
 | `evolve_code.txt` | Combined source snapshot/reference dump |
 | `LICENSE` | MIT license (free to reuse with credit) |
 | `README.md` | This file |
@@ -93,7 +93,7 @@ After the first online visit it works completely offline. This ZIP is a test pac
 
 New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
 
-**Latest test package — v3.24-test (12 Jun 2026):** Adds a new **Show help bars** toggle in More → Preferences, so the "How this page works" bars can be hidden/re-enabled across the main tabs. It also polishes the Fuel goal/activity edit link by replacing the lonely dot above **edit** with a pencil edit marker. This is a test package, not a declared final release, and may need tweaking after real-device use.
+**Latest test package — v3.28-test (12 Jun 2026):** Adds optional encrypted Google Drive backup, password-encrypted local backup files, restore from encrypted files/Drive, backup reminder frequency (Off/Daily/Weekly/Biweekly/Monthly), and a test notification button so you can see how reminders look. Google Drive backup is off by default, warns twice before enabling, and requires the user to provide a Google OAuth Client ID before upload can work.
 
 **v3.23-test (12 Jun 2026):** A test build focused on reducing daily friction. Food logging gains common portion chips and typo-tolerant search; Progress workout history can repeat a saved session into the live tracker; Backup can now save/share a text file as well as copy the code; the live tracker gets workout notes and tap-to-view exercise history; 150s rest chips are available in-session; Preferences are split into clearer sub-sections; and the bodyweight trend spaces points by date.
 
