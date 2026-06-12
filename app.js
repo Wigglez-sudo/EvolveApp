@@ -3628,9 +3628,10 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.25-test";
+const LATEST_NUM="3.26-test";
 const LATEST_TITLE="Test package: help toggle & Fuel polish";
 const LATEST_ITEMS=[
+  "<b>Centered icon fix</b> — all mobile / PWA icon assets were regenerated from the corrected centered logo so installs no longer look off-centre.",
   "<b>Brand refresh</b> — Evolve now uses the new gradient <b>E</b> logo on the splash screen, in the app chrome and for installable mobile icons.",
   "<b>Test package</b> — this is a v3.24 test build, not a declared final release. Use it, check it, and expect small tweaks.",
   "<b>Show help bars</b> — More → Preferences now has a <b>Show help bars</b> toggle so experienced users can hide or re-enable the &quot;How this page works&quot; bars across the main tabs.",
@@ -4094,7 +4095,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.25-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.26-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
 function openExport(){
