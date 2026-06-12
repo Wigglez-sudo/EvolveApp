@@ -3659,7 +3659,7 @@ function maybeBackupBanner(container){
   if(!backupReminderDue()) return;
   const freq=backupReminderLabel(DATA.meta.backupReminder).toLowerCase();
   const ban=el("div","banner");
-  ban.innerHTML=`<div style="font-size:22px">🛟</div><div class="bx"><b>Backup reminder</b><br>Your ${freq} backup is due. Make a fresh encrypted or manual backup so you don't lose progress.</div>`;
+  ban.innerHTML=`<div style="font-size:22px">🛟</div><div class="bx"><b>Backup reminder</b><br>Your ${freq} backup is due. Make a fresh encrypted backup file or backup code so you don't lose progress.</div>`;
   const go=el("button","btn sm gold","Backup"); go.addEventListener("click",()=>{moreOpenSections.add("backup"); switchTab("more");});
   ban.appendChild(go); container.appendChild(ban);
 }
@@ -3725,9 +3725,9 @@ function backupReminder(){
       <div class="wf-t">Keep your data safe</div>
       <div class="wf-s">Everything you log lives <b>only on this device</b> — there's no cloud and no account. That keeps your data private, but it means:</div></div>
     <div class="wf-warn">
-      <div class="wf-warn-row">📤 <span>In <b>More → Backup &amp; restore</b>, tap <b>Export backup code</b>, then copy it or use <b>Save / share backup file</b> and keep it somewhere safe — Files, Notes, email, anywhere you won't lose it.</span></div>
-      <div class="wf-warn-row">🔑 <span><b>That code is the only way to get your data back</b> if you change phone, clear Safari, or delete the app. Don't lose it.</span></div>
-      <div class="wf-warn-row">🔁 <span>A code is a <b>snapshot</b> of right now — it doesn't update itself. After a big session or once a week, export a <b>fresh</b> code so your saved backup isn't out of date.</span></div>
+      <div class="wf-warn-row">📤 <span>In <b>More → Backup &amp; restore</b>, tap <b>Create encrypted backup file</b> or <b>Export backup code</b>, then save it somewhere safe — Files, iCloud, Google Drive, Proton Drive, Notes, email, anywhere you won't lose it.</span></div>
+      <div class="wf-warn-row">🔑 <span><b>That backup is the only way to get your data back</b> if you change phone, clear Safari, or delete the app. Don't lose it.</span></div>
+      <div class="wf-warn-row">🔁 <span>A backup is a <b>snapshot</b> of right now — it doesn't update itself. After a big session or once a week, export a <b>fresh</b> code so your saved backup isn't out of date.</span></div>
     </div>
     <button class="btn str block" id="wf_backup" style="margin-top:16px">Export my first backup now</button>
     <button class="btn ghost block" id="wf_later" style="margin-top:10px">I'll do it later</button>`);
@@ -3735,14 +3735,14 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.28-test";
-const LATEST_TITLE="Test package: encrypted Drive backup & reminders";
+const LATEST_NUM="3.29-test";
+const LATEST_TITLE="Test package: simple encrypted cloud save";
 const LATEST_ITEMS=[
-  "<b>Optional Google Drive backup</b> — off by default, warns twice before enabling, encrypts locally first, then uploads only the encrypted file to the user's own Drive.",
-  "<b>Encrypted backup files</b> — create and restore password-locked backup files without using Google Drive or any cloud provider.",
-  "<b>Backup reminders</b> — choose <b>Off</b>, <b>Daily</b>, <b>Weekly</b>, <b>Biweekly</b> or <b>Monthly</b>, with an in-app reminder and a <b>Send test notification</b> button.",
-  "<b>Drive restore</b> — sign into Google, download the encrypted Evolve backup, decrypt it locally with your password, and restore.",
-  "<b>Privacy guardrails</b> — Drive Client ID/file IDs stay local and are stripped from exported backup data. Profile photos remain excluded from backup files."
+  "<b>Simpler cloud-safe backups</b> — Evolve now creates an encrypted backup file locally, then opens your phone's normal Save/Share sheet so you choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA or anywhere else.",
+  "<b>No Google setup needed</b> — the awkward Google OAuth / Client ID flow has been removed from the main app. No account connection is needed inside Evolve.",
+  "<b>Privacy wording tightened</b> — Evolve explains before export that the file may leave the device if you save it to cloud storage, but Evolve itself does not upload it or know where you store it.",
+  "<b>Encrypted restore kept</b> — restore from the encrypted file using the password; wrong passwords fail safely.",
+  "<b>Backup reminders kept</b> — choose <b>Off</b>, <b>Daily</b>, <b>Weekly</b>, <b>Biweekly</b> or <b>Monthly</b>, with an in-app reminder and a <b>Send test notification</b> button."
 ];
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
@@ -4135,35 +4135,26 @@ function renderMore(){
   /* ---- BACKUP & RESTORE ---- */
   function buildBackup(body){
     const last=DATA.meta.lastBackup?prettyDate(DATA.meta.lastBackup):"Never";
-    const cloud=DATA.meta.driveEnabled;
-    body.appendChild(el("p","tiny muted","By default, Evolve stays local. Manual backups and optional Google Drive backups are user-controlled. Drive backups are encrypted on this device before upload." )).style.margin="0 0 12px";
+    body.appendChild(el("p","tiny muted","Evolve is local-first by default. For cloud safety, create an encrypted backup file first, then use your phone's own Save/Share sheet to choose where it goes. Evolve does not upload it automatically and does not know where you store it." )).style.margin="0 0 12px";
 
     const status=el("div","card"); status.style.marginBottom="12px";
     status.innerHTML=`<div class="t" style="font-size:14.5px;font-weight:700">Backup status</div>
-      <div class="tiny muted" style="margin-top:6px;line-height:1.55">Last local/cloud backup: <b>${last}</b><br>Reminder: <b>${backupReminderLabel(DATA.meta.backupReminder)}</b>${DATA.meta.lastDriveBackup?`<br>Last Google Drive backup: <b>${new Date(DATA.meta.lastDriveBackup).toLocaleString()}</b>`:""}</div>`;
+      <div class="tiny muted" style="margin-top:6px;line-height:1.55">Last backup made: <b>${last}</b><br>Reminder: <b>${backupReminderLabel(DATA.meta.backupReminder)}</b></div>`;
     body.appendChild(status);
 
-    const exb=el("button","btn block","Export backup code"); exb.addEventListener("click",openExport);
-    const imb=el("button","btn block","Import / restore from code"); imb.style.marginTop="10px"; imb.addEventListener("click",openImport);
-    body.append(exb,imb);
-
     const enc=el("div","card"); enc.style.marginTop="12px";
-    enc.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔐 Encrypted backup file</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Creates a password-locked backup before it leaves this device. Store it anywhere you like — Files, iCloud, Google Drive, Proton Drive, email, USB, etc.</p>`;
-    const encMake=el("button","btn block","Create encrypted backup file"); encMake.addEventListener("click",openEncryptedExport);
+    enc.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔐 Encrypted cloud-safe backup</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">This is the recommended backup. Evolve locks your data with a password on this device first, then opens the normal Save/Share sheet. You choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA, email, USB or anything else your phone offers.</p>`;
+    const encMake=el("button","btn str block","Create encrypted backup & save/share"); encMake.addEventListener("click",openEncryptedExport);
     const encRestore=el("button","btn ghost block","Restore encrypted backup file"); encRestore.style.marginTop="10px"; encRestore.addEventListener("click",openEncryptedFileRestore);
     enc.append(encMake,encRestore); body.appendChild(enc);
 
-    const drive=el("div","card"); drive.style.marginTop="12px";
-    drive.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">☁️ Optional Google Drive backup</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Off by default. When enabled, Evolve encrypts the backup locally, then uploads only the encrypted file to your own Google Drive. Evolve has no server and cannot read that file.</p>
-      <div class="tiny muted" style="margin-bottom:8px">Status: <b>${cloud?"Enabled":"Off"}</b></div>
-      <div class="field"><label>Google OAuth Client ID</label><input class="input" id="drv_client" value="${esc(DATA.meta.driveClientId||"")}" placeholder="Paste your Google client ID"></div>`;
-    const saveClient=el("button","btn ghost block","Save Client ID"); saveClient.addEventListener("click",()=>{DATA.meta.driveClientId=$("#drv_client").value.trim();save();toast("Google Client ID saved");renderMore();});
-    const toggleDrive=el("button",cloud?"btn danger block":"btn block",cloud?"Turn Google Drive backup off":"Enable Google Drive backup"); toggleDrive.style.marginTop="10px"; toggleDrive.addEventListener("click",cloud?disableDriveBackup:openDrivePrivacyWarning1);
-    const driveNow=el("button","btn str block","Backup now to Google Drive"); driveNow.style.marginTop="10px"; driveNow.disabled=!cloud; driveNow.addEventListener("click",openDriveBackupNow);
-    const driveRestore=el("button","btn ghost block","Restore from Google Drive"); driveRestore.style.marginTop="10px"; driveRestore.disabled=!cloud; driveRestore.addEventListener("click",openDriveRestore);
-    drive.append(saveClient,toggleDrive,driveNow,driveRestore); body.appendChild(drive);
+    const plain=el("div","card"); plain.style.marginTop="12px";
+    plain.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">💾 Backup code</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Simple copy/paste backup. Useful for quick manual saves, but encrypted backup files are better for cloud storage.</p>`;
+    const exb=el("button","btn block","Export backup code"); exb.addEventListener("click",openExport);
+    const imb=el("button","btn ghost block","Import / restore from code"); imb.style.marginTop="10px"; imb.addEventListener("click",openImport);
+    plain.append(exb,imb); body.appendChild(plain);
 
     const rem=el("div","card"); rem.style.marginTop="12px";
     rem.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔔 Backup reminders</div>
@@ -4241,7 +4232,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.28-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.29-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
 
@@ -4290,8 +4281,17 @@ async function saveOrShareBlob(blob,name,title="Evolve backup",text="Evolve back
 }
 function openEncryptedExport(){
   if(!backupCryptoReady()){toast("Encryption is not available in this browser");return;}
+  openModal(`<h3>Encrypted backup privacy check</h3>
+    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px"><b>Evolve will not upload anything by itself.</b><br><br>It will create an encrypted backup file on this device first. If you choose iCloud, Google Drive, Proton Drive, Dropbox, email or another cloud app in the share sheet, that encrypted file leaves this device and is stored by the provider you choose.</p>
+    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px">Do not lose your password. Evolve cannot recover encrypted backups without it.</p>
+    <button class="btn str block" id="enc_continue">I understand — create encrypted backup</button>
+    <button class="btn ghost block" id="enc_cancel" style="margin-top:10px">Cancel</button>`);
+  $("#enc_cancel").addEventListener("click",closeModal);
+  $("#enc_continue").addEventListener("click",openEncryptedExportPassword);
+}
+function openEncryptedExportPassword(){
   openModal(`<h3>Create encrypted backup</h3>
-    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">This creates a password-locked file on this device first. If you save/share it to cloud storage, only the encrypted file leaves Evolve. Do not lose the password — Evolve cannot recover it.</p>
+    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">Choose a password. Evolve encrypts your backup locally, then opens Save/Share so you decide where to keep the file.</p>
     <div class="field"><label>Password</label><input class="input" id="enc_pw" type="password" autocomplete="new-password" placeholder="Minimum 8 characters"></div>
     <div class="field"><label>Repeat password</label><input class="input" id="enc_pw2" type="password" autocomplete="new-password"></div>
     <button class="btn str block" id="enc_make">Create encrypted file</button>`);
@@ -4315,75 +4315,6 @@ function openEncryptedRestoreText(text){
   $("#dec_go").addEventListener("click",async()=>{
     try{const obj=await decryptEncryptedBackupText(text,$("#dec_pw").value); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
     catch(e){toast("Couldn't decrypt — check the password/file");}
-  });
-}
-function openDrivePrivacyWarning1(){
-  openModal(`<h3>Optional Google Drive backup</h3>
-    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px"><b>Evolve is private and local by default.</b><br><br>If you turn this on, Evolve will create an encrypted backup file on this device first, then upload that encrypted file to your own Google Drive. The backup leaves this device and is stored by Google, not Evolve.</p>
-    <button class="btn str block" id="drv_w1">I understand — continue</button>
-    <button class="btn ghost block" id="drv_cancel" style="margin-top:10px">Cancel</button>`);
-  $("#drv_cancel").addEventListener("click",closeModal);
-  $("#drv_w1").addEventListener("click",openDrivePrivacyWarning2);
-}
-function openDrivePrivacyWarning2(){
-  openModal(`<h3>Final privacy check</h3>
-    <p class="tiny muted" style="line-height:1.6;margin-bottom:14px">Evolve cannot read your encrypted backup without the password, but your encrypted file will be in Google Drive. Do not enable this if you want all backup files to stay only on this device.</p>
-    <button class="btn str block" id="drv_enable">Enable optional Drive backup</button>
-    <button class="btn ghost block" id="drv_cancel2" style="margin-top:10px">Keep it off</button>`);
-  $("#drv_cancel2").addEventListener("click",closeModal);
-  $("#drv_enable").addEventListener("click",()=>{DATA.meta.driveEnabled=true;save();closeModal();renderMore();toast("Google Drive backup enabled");});
-}
-function disableDriveBackup(){DATA.meta.driveEnabled=false; DATA.meta.driveFileId=null; save(); renderMore(); toast("Google Drive backup off");}
-const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";
-function loadGoogleIdentity(){return new Promise((resolve,reject)=>{if(window.google&&google.accounts&&google.accounts.oauth2){resolve();return;} const s=document.createElement("script"); s.src="https://accounts.google.com/gsi/client"; s.async=true; s.defer=true; s.onload=resolve; s.onerror=()=>reject(new Error("Google sign-in failed to load")); document.head.appendChild(s);});}
-async function getDriveToken(){
-  const clientId=(DATA.meta.driveClientId||"").trim(); if(!clientId) throw new Error("missing-client-id");
-  await loadGoogleIdentity();
-  return new Promise((resolve,reject)=>{try{const tc=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:DRIVE_SCOPE,callback:(r)=>{if(r&&r.access_token)resolve(r.access_token); else reject(new Error((r&&r.error)||"No token"));}}); tc.requestAccessToken({prompt:"consent"});}catch(e){reject(e);}});
-}
-async function driveUploadEncryptedText(text,token){
-  const boundary="evolve_"+Math.random().toString(36).slice(2);
-  const metadata={name:"evolve-encrypted-backup.json",mimeType:"application/json"};
-  const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${text}\r\n--${boundary}--`;
-  const id=DATA.meta.driveFileId;
-  const url=id?`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(id)}?uploadType=multipart&fields=id,name,modifiedTime`:`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime`;
-  const res=await fetch(url,{method:id?"PATCH":"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"multipart/related; boundary="+boundary},body});
-  if(!res.ok && id){DATA.meta.driveFileId=null; save(); return driveUploadEncryptedText(text,token);}
-  if(!res.ok) throw new Error(await res.text());
-  const j=await res.json(); DATA.meta.driveFileId=j.id; DATA.meta.lastBackup=todayISO(); DATA.meta.lastDriveBackup=new Date().toISOString(); save(); return j;
-}
-function openDriveBackupNow(){
-  if(!DATA.meta.driveEnabled){openDrivePrivacyWarning1();return;}
-  if(!(DATA.meta.driveClientId||"").trim()){toast("Add your Google OAuth Client ID first");return;}
-  openModal(`<h3>Backup to Google Drive</h3>
-    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">Enter a password. Evolve encrypts the backup locally, then uploads the encrypted file to your Google Drive.</p>
-    <div class="field"><label>Encryption password</label><input class="input" id="drv_pw" type="password" autocomplete="new-password" placeholder="Minimum 8 characters"></div>
-    <button class="btn str block" id="drv_go">Encrypt & upload</button>`);
-  $("#drv_go").addEventListener("click",async()=>{
-    const p=$("#drv_pw").value; if(p.length<8){toast("Use at least 8 characters");return;}
-    try{closeModal(); toast("Signing in to Google…"); const token=await getDriveToken(); toast("Encrypting backup…"); const text=await makeEncryptedBackupText(p); toast("Uploading encrypted backup…"); await driveUploadEncryptedText(text,token); renderMore(); toast("Encrypted backup uploaded to Google Drive ✓");}
-    catch(e){toast(e.message==="missing-client-id"?"Add your Google Client ID first":"Google Drive backup failed");}
-  });
-}
-async function driveFindBackup(token){
-  if(DATA.meta.driveFileId) return DATA.meta.driveFileId;
-  const q=encodeURIComponent("name='evolve-encrypted-backup.json' and trashed=false");
-  const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name,modifiedTime)&pageSize=10`,{headers:{Authorization:`Bearer ${token}`}});
-  if(!res.ok) throw new Error("Drive file search failed");
-  const j=await res.json(); const f=(j.files||[]).sort((a,b)=>String(b.modifiedTime||"").localeCompare(String(a.modifiedTime||"")))[0];
-  if(!f) throw new Error("No Evolve backup found in Drive");
-  DATA.meta.driveFileId=f.id; save(); return f.id;
-}
-function openDriveRestore(){
-  if(!DATA.meta.driveEnabled){openDrivePrivacyWarning1();return;}
-  openModal(`<h3>Restore from Google Drive</h3>
-    <p class="tiny muted" style="line-height:1.55;margin-bottom:12px">This downloads your encrypted Evolve backup from Google Drive, then decrypts it on this device. Restoring replaces all current Evolve data.</p>
-    <div class="field"><label>Backup password</label><input class="input" id="drv_dec_pw" type="password" autocomplete="current-password"></div>
-    <button class="btn danger-solid block" id="drv_restore_go">Download, decrypt & restore</button>`);
-  $("#drv_restore_go").addEventListener("click",async()=>{
-    const pw=$("#drv_dec_pw").value;
-    try{closeModal(); toast("Signing in to Google…"); const token=await getDriveToken(); const id=await driveFindBackup(token); toast("Downloading encrypted backup…"); const res=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,{headers:{Authorization:`Bearer ${token}`}}); if(!res.ok)throw new Error("Download failed"); const text=await res.text(); const obj=await decryptEncryptedBackupText(text,pw); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); updateHeader(); switchTab("stats"); toast("Google Drive backup restored ✓");}
-    catch(e){toast("Restore failed — check Drive access and password");}
   });
 }
 function openExport(){

@@ -1,7 +1,7 @@
 {
   "name": "Evolve",
   "short_name": "Evolve",
-  "description": "Private, offline-first gym & nutrition tracker with the new Evolve brand icon: build workouts, track lifts, log food, and watch progress entirely on-device.",
+  "description": "Private, offline-first gym & nutrition tracker with encrypted local backup files you can save/share to cloud storage of your choice.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -35,5 +35,5 @@
   ],
   "lang": "en",
   "dir": "ltr",
-  "version": "3.28-test"
+  "version": "3.29-test"
 }

@@ -2,7 +2,7 @@
 
 **Train smarter · Become next.**
 
-> Current test package: **v3.28-test** — adds optional encrypted Google Drive backup, encrypted backup files, backup reminders, and a test-notification button.
+> Current test package: **v3.29-test** — simplifies cloud backup into encrypted Save/Share files, removes the Google OAuth setup from the main flow, and keeps backup reminders plus the test-notification button.
 
 Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
 
@@ -26,10 +26,10 @@ Evolve was built to be genuinely private. There is no clever fine print here:
 
 - **Your data stays on your device.** Everything — workouts, food, weight, settings — is saved in your phone's local storage. It never touches a server, because there is no server.
 - **No account, no sign-up, no email.** You open it and use it. Nothing to register.
-- **No cloud by default, no tracking.** Evolve does not phone home, run analytics, fingerprint you, or send your information anywhere by default. Optional Google Drive backup is off by default and only uploads a password-encrypted backup file after you explicitly enable it.
+- **No cloud by default, no tracking.** Evolve does not phone home, run analytics, fingerprint you, or send your information anywhere by default. Cloud backup is manual and user-controlled: Evolve creates an encrypted backup file locally, then you choose where to save/share it. Evolve does not upload it automatically or know where you store it.
 - **No ads.** None, ever.
 - **Works fully offline.** After the first visit it runs with no internet at all.
-- **You own your data.** Export a **backup code** any time (More → Backup & restore), create a password-encrypted backup file, or optionally upload an encrypted file to your own Google Drive. Anything that leaves the phone happens only when *you* choose it.
+- **You own your data.** Export a **backup code** any time (More → Backup & restore), create a password-encrypted backup file, then save/share it to iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA, email, USB, or anywhere else your phone offers. Anything that leaves the phone happens only when *you* choose it.
 
 Because your data lives locally by default, the one thing to remember is: **export a backup code or encrypted backup and keep it somewhere safe**. If you delete the app or switch phones without a backup, the data goes with it. Evolve can remind you daily, weekly, biweekly, monthly, or not at all.
 
@@ -47,7 +47,7 @@ Because your data lives locally by default, the one thing to remember is: **expo
 - **Progress** — date-scaled bodyweight trend, lifting volume, estimated 1-rep-max, a training calendar, workout history with repeat-from-history, and streaks.
 - **Themes** — recolour the whole app with one tap.
 - **Built-in help** — a "How this page works" button on every main tab explains what it does and how to use it; experienced users can hide/re-enable those bars in More → Preferences.
-- **Backup & restore** — portable export/import codes, password-encrypted backup files, optional encrypted Google Drive upload/restore, and backup reminders with a test notification button.
+- **Backup & restore** — portable export/import codes, password-encrypted backup files that can be saved/shared to cloud storage of the user’s choice, and backup reminders with a test notification button.
 
 ---
 
@@ -71,7 +71,7 @@ Evolve is deliberately simple under the hood:
 | `manifest.json` | App name, icons, and install settings (icons are embedded) |
 | `sw.js` | Service worker — offline caching |
 | `EVOLVE_HANDOFF.txt` | Developer notes / project history |
-| `Evolve-v3.28-test-preview.html` | Single-file preview build for testing |
+| `Evolve-v3.29-test-preview.html` | Single-file preview build for testing |
 | `evolve_code.txt` | Combined source snapshot/reference dump |
 | `LICENSE` | MIT license (free to reuse with credit) |
 | `README.md` | This file |
@@ -93,7 +93,9 @@ After the first online visit it works completely offline. This ZIP is a test pac
 
 New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
 
-**Latest test package — v3.28-test (12 Jun 2026):** Adds optional encrypted Google Drive backup, password-encrypted local backup files, restore from encrypted files/Drive, backup reminder frequency (Off/Daily/Weekly/Biweekly/Monthly), and a test notification button so you can see how reminders look. Google Drive backup is off by default, warns twice before enabling, and requires the user to provide a Google OAuth Client ID before upload can work.
+**Latest test package — v3.29-test (12 Jun 2026):** Simplifies cloud backup. The awkward Google Drive OAuth / Client ID flow has been removed from the main app. Evolve now creates a password-encrypted backup file locally, then opens the phone’s normal Save/Share sheet so the user can choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA, email, USB, or any other storage target. Backup reminders, notification permission, Send test notification, encrypted restore, manual backup codes, local profile photos and all v3.28 safeguards remain.
+
+**v3.28-test (12 Jun 2026):** Added optional encrypted Google Drive backup, password-encrypted local backup files, restore from encrypted files/Drive, backup reminder frequency (Off/Daily/Weekly/Biweekly/Monthly), and a test notification button so you can see how reminders look. Google Drive backup was off by default, warned twice before enabling, and required the user to provide a Google OAuth Client ID before upload could work. This was replaced in v3.29-test by the simpler encrypted Save/Share flow.
 
 **v3.23-test (12 Jun 2026):** A test build focused on reducing daily friction. Food logging gains common portion chips and typo-tolerant search; Progress workout history can repeat a saved session into the live tracker; Backup can now save/share a text file as well as copy the code; the live tracker gets workout notes and tap-to-view exercise history; 150s rest chips are available in-session; Preferences are split into clearer sub-sections; and the bodyweight trend spaces points by date.
 
