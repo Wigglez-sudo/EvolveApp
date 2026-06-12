@@ -629,3 +629,6 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 .hist-note{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface2);font-size:13px;line-height:1.45;color:var(--text)}
 .pref-subhead{margin:16px 2px 10px;padding-top:6px;border-top:1px solid var(--line);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:var(--muted)}
 .pref-subhead:first-child{margin-top:2px;border-top:0;padding-top:0}
+
+/* v3.24-test additions */
+.fuel-edit-link{font-weight:700;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}

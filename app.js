@@ -111,7 +111,7 @@ const KEY="evolve_v1";
 const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
-  prefs:{energy:"kcal", addExercise:true, showAchievements:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
+  prefs:{energy:"kcal", addExercise:true, showAchievements:true, showHelpBars:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
     restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home"},
   customFoods:[], /* {name,kcal,p,c,f} per 100g, user-added */
   favFoods:[],  /* GLOBAL favourite food names */
@@ -148,6 +148,7 @@ function migrate(d){
   if(d.prefs.waterUnit!=="floz") d.prefs.waterUnit="ml";             /* water display unit */
   if(!(Number(d.prefs.waterStep)>0)) d.prefs.waterStep=250;          /* +1 tap water amount (ml) */
   if(!["home","train","fuel","stats","more"].includes(d.prefs.startTab)) d.prefs.startTab="home"; /* tab shown on open */
+  if(typeof d.prefs.showHelpBars!=="boolean") d.prefs.showHelpBars=true; /* show the per-tab "How this page works" bars by default */
   if(!d.statResets || typeof d.statResets!=="object") d.statResets={};
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DATA));}catch(e){toast("Storage full or blocked");}}
@@ -764,7 +765,7 @@ const TAB_HELP={
     <p class="help-lead">Make Evolve yours — everything here saves to this device only.</p>
     <div class="help-row"><b>Profile</b><span>Your body stats, goal and activity level; sets your calorie &amp; macro targets.</span></div>
     <div class="help-row"><b>Units</b><span>Energy (kcal/kJ), lifting weight (kg/lb) and bodyweight (kg/lb/stone).</span></div>
-    <div class="help-row"><b>Preferences</b><span>Theme, burned-calorie credit, achievements, meal times, gym equipment, 1RM formula.</span></div>
+    <div class="help-row"><b>Preferences</b><span>Theme, help bars, burned-calorie credit, achievements, meal times, gym equipment, 1RM formula.</span></div>
     <div class="help-row"><b>Timers</b><span>Default rest length, plus rest-end beep and screen-flash on/off.</span></div>
     <div class="help-row"><b>Keep screen awake</b><span>Stops the screen dimming while you train (where supported).</span></div>
     <div class="help-row"><b>Water</b><span>Choose ml or fl oz and how much each tap adds.</span></div>
@@ -777,7 +778,9 @@ function openTabHelp(k){ const h=TAB_HELP[k]; if(!h)return;
   openModal(`<h3>${h.t} — how it works</h3><div style="max-height:62vh;overflow:auto;margin-top:6px">${h.b}</div>
     <button class="btn block" id="th_ok" style="margin-top:6px">Got it</button>`);
   const ok=$("#th_ok"); if(ok)ok.addEventListener("click",closeModal); }
-function helpBar(k){ const btn=el("button","help-bar");
+function helpBar(k){
+  if(DATA.prefs && DATA.prefs.showHelpBars===false) return document.createDocumentFragment();
+  const btn=el("button","help-bar");
   btn.innerHTML=`<span class="hb-l"><span class="hb-i">ⓘ</span> How this page works</span><span class="hb-go">›</span>`;
   btn.addEventListener("click",()=>openTabHelp(k)); return btn; }
 
@@ -2768,7 +2771,7 @@ function renderFuel(){
   if(pf){
     const manual=DATA.prefs.targetMode==="manual";
     const ga=el("button","btn ghost block"); ga.style.marginTop="16px";
-    ga.innerHTML=`🎯 ${manual?"Daily targets · set manually":`${GOALS[pf.goal]?.l||"—"} · ${ACT[pf.activity]?.l||"—"}`} <span class="muted" style="font-weight:600">· edit</span>`;
+    ga.innerHTML=`🎯 ${manual?"Daily targets · set manually":`${GOALS[pf.goal]?.l||"—"} · ${ACT[pf.activity]?.l||"—"}`} <span class="muted fuel-edit-link">✏️ edit</span>`;
     ga.addEventListener("click",openGoalActivity);
     b.appendChild(ga);
   }
@@ -3620,10 +3623,12 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.23-test";
-const LATEST_TITLE="Test package: faster logging & safer backups";
+const LATEST_NUM="3.24-test";
+const LATEST_TITLE="Test package: help toggle & Fuel polish";
 const LATEST_ITEMS=[
-  "<b>Test package</b> — this is a v3.23 test build, not a declared final release. Use it, check it, and expect small tweaks.",
+  "<b>Test package</b> — this is a v3.24 test build, not a declared final release. Use it, check it, and expect small tweaks.",
+  "<b>Show help bars</b> — More → Preferences now has a <b>Show help bars</b> toggle so experienced users can hide or re-enable the &quot;How this page works&quot; bars across the main tabs.",
+  "<b>Fuel edit polish</b> — the Goal & activity edit link now uses a pencil marker instead of the lonely dot above <b>edit</b>.",
   "<b>Faster food logging</b> — common portion chips like <b>1 egg</b>, <b>1 slice</b> and <b>1 banana</b> sit above grams, with grams still there as the fallback.",
   "<b>Smarter food search</b> — results now rank exact/prefix matches first and tolerate one-letter typos such as <b>chiken</b>.",
   "<b>Repeat from history</b> — open a past workout in Progress and tap <b>↻ Do this workout again</b> to load it into the live tracker.",
@@ -3938,11 +3943,16 @@ function renderMore(){
       <div class="seg" id="pf_wstep">${stepOpts.map(ml=>`<button data-v="${ml}" class="${(+DATA.prefs.waterStep===ml)?"on":""}">${DATA.prefs.waterUnit==="floz"?Math.round(ml/29.5735)+"oz":ml+"ml"}</button>`).join("")}</div>`;
     body.appendChild(wu);
     prefHead("App");
-    const dt=el("div"); dt.style.marginBottom="16px";
+    const dt=el("div"); dt.style.marginBottom="14px";
     const tabOpts=[["home","Home"],["train","Train"],["fuel","Fuel"],["stats","Progress"]];
     dt.innerHTML=`<div class="tiny muted" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Tab shown on open</div>
       <div class="seg" id="pf_starttab">${tabOpts.map(([v,l])=>`<button data-v="${v}" class="${(DATA.prefs.startTab||"home")===v?"on":""}">${l}</button>`).join("")}</div>`;
     body.appendChild(dt);
+    const hbOpt=el("div"); hbOpt.style.marginBottom="16px";
+    hbOpt.innerHTML=`<div class="tiny muted" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Show help bars</div>
+      <div class="seg" id="pf_helpbars"><button data-v="on" class="${DATA.prefs.showHelpBars!==false?"on":""}">On</button><button data-v="off" class="${DATA.prefs.showHelpBars===false?"on":""}">Off</button></div>
+      <div class="tiny muted" style="margin-top:5px">Shows or hides the “How this page works” bars on the main tabs.</div>`;
+    body.appendChild(hbOpt);
     const th=el("div");
     th.innerHTML=`<div class="tiny muted" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">App colour theme</div>
       <div class="theme-row" id="pf_theme">${Object.keys(THEMES).map(k=>`<button class="theme-sw ${(DATA.prefs.theme||'ember')===k?'on':''}" data-v="${k}" title="${THEMES[k].name}" style="background:linear-gradient(135deg,${THEMES[k].a2},${THEMES[k].a})"></button>`).join("")}</div>
@@ -3975,6 +3985,8 @@ function renderMore(){
       DATA.prefs.waterStep=+btn.dataset.v;save();renderMore();toast("Water per tap updated");}));
     $("#pf_starttab").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
       DATA.prefs.startTab=btn.dataset.v;save();renderMore();toast("Opens on: "+btn.dataset.v.charAt(0).toUpperCase()+btn.dataset.v.slice(1));}));
+    $("#pf_helpbars").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
+      DATA.prefs.showHelpBars=(btn.dataset.v==="on"); save(); renderMore(); toast(DATA.prefs.showHelpBars?"Help bars shown":"Help bars hidden");}));
     $("#pf_theme").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
       DATA.prefs.theme=btn.dataset.v; applyTheme(btn.dataset.v); save();
       $("#pf_theme").querySelectorAll("button").forEach(x=>x.classList.remove("on")); btn.classList.add("on");
@@ -4076,7 +4088,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.23-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.24-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
 function openExport(){

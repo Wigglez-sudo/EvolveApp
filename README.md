@@ -44,7 +44,7 @@ Because your data lives only on your device, the one thing to remember is: **exp
   - **Recent & frequent foods** for one-tap re-logging, **favourite foods (★)**, and **repeat a meal** from another day.
 - **Progress** — date-scaled bodyweight trend, lifting volume, estimated 1-rep-max, a training calendar, workout history with repeat-from-history, and streaks.
 - **Themes** — recolour the whole app with one tap.
-- **Built-in help** — a "How this page works" button on every tab explains what it does and how to use it.
+- **Built-in help** — a "How this page works" button on every main tab explains what it does and how to use it; experienced users can hide/re-enable those bars in More → Preferences.
 - **Backup & restore** — portable export/import codes plus Save/Share as a text file so your data is yours to move.
 
 ---
@@ -69,7 +69,7 @@ Evolve is deliberately simple under the hood:
 | `manifest.json` | App name, icons, and install settings (icons are embedded) |
 | `sw.js` | Service worker — offline caching |
 | `EVOLVE_HANDOFF.txt` | Developer notes / project history |
-| `Evolve-v3.23-test-preview.html` | Single-file preview build for testing |
+| `Evolve-v3.24-test-preview.html` | Single-file preview build for testing |
 | `evolve_code.txt` | Combined source snapshot/reference dump |
 | `LICENSE` | MIT license (free to reuse with credit) |
 | `README.md` | This file |
@@ -91,7 +91,9 @@ After the first online visit it works completely offline. This ZIP is a test pac
 
 New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
 
-**Latest test package — v3.23-test (12 Jun 2026):** A test build focused on reducing daily friction. Food logging gains common portion chips and typo-tolerant search; Progress workout history can repeat a saved session into the live tracker; Backup can now save/share a text file as well as copy the code; the live tracker gets workout notes and tap-to-view exercise history; 150s rest chips are available in-session; Preferences are split into clearer sub-sections; and the bodyweight trend spaces points by date. This is a test package, not a declared final release, and may need tweaking after real-device use.
+**Latest test package — v3.24-test (12 Jun 2026):** Adds a new **Show help bars** toggle in More → Preferences, so the "How this page works" bars can be hidden/re-enabled across the main tabs. It also polishes the Fuel goal/activity edit link by replacing the lonely dot above **edit** with a pencil edit marker. This is a test package, not a declared final release, and may need tweaking after real-device use.
+
+**v3.23-test (12 Jun 2026):** A test build focused on reducing daily friction. Food logging gains common portion chips and typo-tolerant search; Progress workout history can repeat a saved session into the live tracker; Backup can now save/share a text file as well as copy the code; the live tracker gets workout notes and tap-to-view exercise history; 150s rest chips are available in-session; Preferences are split into clearer sub-sections; and the bodyweight trend spaces points by date.
 
 **v3.22 (12 Jun 2026):** A quality-of-life polish pass across every tab. The bottom nav now puts **Home in the centre** (raised and bordered in your theme colour) with Settings on the right; the **Progress** tab groups its sections into **Trends**, **Activity** and **Goals & milestones** with **Expand / Collapse all**; **Settings** gains a profile header, colour-coded sections, and new options (**default rest timer**, rest **beep** & **flash** toggles, **keep screen awake**, **water unit & tap amount**, and which **tab opens** first); **Home** gains *Quick actions* and a tappable *At a glance* strip; the **Fuel** tab finally has its own title; every **How this page works** sheet was rewritten into quick, scannable rows (Settings has one now too); the splash *What's new* no longer overlaps the footer; and manual macro targets add up to your exact calories.
 
