@@ -87,7 +87,9 @@ After the first online visit it works completely offline. Full step-by-step inst
 
 New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
 
-**Latest release — v3.21 (12 Jun 2026):** The Fuel tab is reorganised so it's quicker to use — **Add food**, Burned and Repeat a meal sit right under your calorie ring and macros, your food log moved up, Goal & activity became a small link at the bottom, and the **Show meal times** switch moved to **More → Preferences**.
+**Latest release — v3.22 (12 Jun 2026):** A quality-of-life polish pass across every tab. The bottom nav now puts **Home in the centre** (raised and bordered in your theme colour) with Settings on the right; the **Progress** tab groups its sections into **Trends**, **Activity** and **Goals & milestones** with **Expand / Collapse all**; **Settings** gains a profile header, colour-coded sections, and new options (**default rest timer**, rest **beep** & **flash** toggles, **keep screen awake**, **water unit & tap amount**, and which **tab opens** first); **Home** gains *Quick actions* and a tappable *At a glance* strip; the **Fuel** tab finally has its own title; every **How this page works** sheet was rewritten into quick, scannable rows (Settings has one now too); the splash *What's new* no longer overlaps the footer; and manual macro targets add up to your exact calories.
+
+**v3.21 (12 Jun 2026):** The Fuel tab is reorganised so it's quicker to use — **Add food**, Burned and Repeat a meal sit right under your calorie ring and macros, your food log moved up, Goal & activity became a small link at the bottom, and the **Show meal times** switch moved to **More → Preferences**.
 
 **v3.20 (12 Jun 2026):** Cardio no longer loses your progress — leave a cardio timer mid-workout (✕, Back, or switching away) and it now **resumes from where you left off** instead of restarting at zero, with the elapsed time and a **Resume** button shown on the card; progress is even kept if the app closes mid-session.
 
