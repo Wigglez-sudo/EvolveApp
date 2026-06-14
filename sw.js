@@ -1,6 +1,6 @@
 /* Evolve service worker — offline app shell caching.
    Bump CACHE whenever you change ANY of the shell files so phones pick up the new version. */
-const CACHE = "evolve-v3-39";
+const CACHE = "evolve-v3-31-finalfix3";
 const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon.png"];
 
 self.addEventListener("install", (e) => {
@@ -39,16 +39,8 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Cross-origin (e.g. Google Fonts): network-first, fall back to cache if we have it.
-  e.respondWith(
-    fetch(req)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        return res;
-      })
-      .catch(() => caches.match(req))
-  );
+  // Cross-origin requests are not part of the app shell. Try the network only.
+  e.respondWith(fetch(req).catch(() => caches.match(req)));
 });
 
 

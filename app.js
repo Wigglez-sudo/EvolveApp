@@ -128,7 +128,7 @@ const DEFAULT_DATA = {
   weights:[],   /* {date,kg} */
   ach:{workoutsDone:0,totalVolume:0,streak:0,bestStreak:0,lastWorkoutDate:null,prs:{},unlocked:[]},
   statResets:{}, /* per-stat user resets: key -> {start, since} (prs: {since}) */
-  meta:{lastBackup:null, created:null, backupReminder:"weekly", backupNotifications:false, backupNotifyLast:null, driveEnabled:false, driveClientId:"", driveFileId:null, lastDriveBackup:null}
+  meta:{lastBackup:null, created:null, backupReminder:"weekly", backupNotifications:false, backupNotifyLast:null}
 };
 let DATA = load();
 function load(){
@@ -159,13 +159,14 @@ function migrate(d){
   if(!d.meta || typeof d.meta!=="object") d.meta={};
   if(!["off","daily","weekly","biweekly","monthly"].includes(d.meta.backupReminder)) d.meta.backupReminder="weekly";
   if(typeof d.meta.backupNotifications!=="boolean") d.meta.backupNotifications=false;
-  if(typeof d.meta.driveEnabled!=="boolean") d.meta.driveEnabled=false;
-  if(typeof d.meta.driveClientId!=="string") d.meta.driveClientId="";
-  if(typeof d.meta.driveFileId!=="string") d.meta.driveFileId=null;
-  if(typeof d.meta.lastDriveBackup!=="string") d.meta.lastDriveBackup=null;
+  /* Remove old v3.28 Google Drive OAuth metadata. Evolve now only creates local backup files and lets the user choose where to store them. */
+  delete d.meta.driveEnabled; delete d.meta.driveClientId; delete d.meta.driveFileId; delete d.meta.lastDriveBackup;
 }
 
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DATA));}catch(e){toast("Storage full or blocked");}}
+function clearEvolveStorage(){
+  [KEY,PROFILE_PHOTO_KEY,PROGRESS_PHOTOS_KEY,LIVE_KEY].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} });
+}
 
 /* ===================== THEMES ===================== */
 const THEMES={
@@ -2562,7 +2563,7 @@ function makeFlexCard(wk,prs,badges){
   const draw=()=>{
   const W=1080,H=1350; const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
   const x=cv.getContext("2d");
-  const BEBAS=`"Bebas Neue", Impact, sans-serif`, INTER=`"Inter", system-ui, sans-serif`;
+  const BEBAS=`Impact, "Arial Narrow", sans-serif`, INTER=`system-ui, -apple-system, "Segoe UI", sans-serif`;
   const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#15100b"); g.addColorStop(.55,"#0c0f17"); g.addColorStop(1,"#0a1411");
   x.fillStyle=g; x.fillRect(0,0,W,H);
   const rg=x.createRadialGradient(160,180,0,160,180,560); rg.addColorStop(0,"rgba(255,106,44,.55)"); rg.addColorStop(1,"rgba(255,106,44,0)");
@@ -2570,7 +2571,7 @@ function makeFlexCard(wk,prs,badges){
   const rg2=x.createRadialGradient(W-120,H-180,0,W-120,H-180,620); rg2.addColorStop(0,"rgba(47,230,168,.42)"); rg2.addColorStop(1,"rgba(47,230,168,0)");
   x.fillStyle=rg2; x.fillRect(0,0,W,H);
   x.textAlign="left";
-  /* brand wordmark in Bebas to match the app */
+  /* brand wordmark in a local display-font stack to keep the app offline/private */
   x.fillStyle="#fff"; x.font=`96px ${BEBAS}`; x.fillText("EVOLVE", 78, 158);
   x.fillStyle="rgba(255,255,255,.6)"; x.font=`600 28px ${INTER}`; x.fillText("TRAIN SMARTER · BECOME NEXT", 82, 202);
   x.fillStyle="#fff";
@@ -3002,7 +3003,7 @@ function renderFuel(){
   const wStepLbl=(ml)=> wIsOz ? ("+"+Math.round(ml/29.5735)) : ("+"+ml);
   wc.innerHTML=`<div class="lrow" style="padding:0 0 10px"><div class="ico">💧</div>
     <div class="main"><div class="t">Water</div><div class="s num">${wDisp(log.water)} / ${wDisp(t.water)}</div></div>
-    <div class="num" style="font-family:'Bebas Neue';font-size:30px;color:#5AA9FF">${Math.round(wpct)}%</div></div>
+    <div class="num" style="font-family:var(--font-display);font-size:30px;color:#5AA9FF">${Math.round(wpct)}%</div></div>
     <div class="bar"><i style="width:${wpct}%;background:#5AA9FF"></i></div>
     <div class="row" style="gap:8px;margin-top:12px">
      <button class="btn sm" data-w="${wStep}" style="flex:1">${wStepLbl(wStep)}</button>
@@ -3712,7 +3713,7 @@ function renderStats(){
     const gc=el("div","card");
     gc.innerHTML=`<div class="lrow" style="padding:0 0 10px"><div class="main">
       <div class="t">Goal weight</div><div class="s num">${bodyStr(now)} → ${bodyStr(goal)}</div></div>
-      <div class="num" style="font-family:'Bebas Neue';font-size:30px;color:var(--fuel)">${prog}%</div></div>
+      <div class="num" style="font-family:var(--font-display);font-size:30px;color:var(--fuel)">${prog}%</div></div>
       <div class="bar"><i style="width:${prog}%;background:var(--grad-fuel)"></i></div>`;
     body.appendChild(gc);
   }
@@ -3837,7 +3838,7 @@ function renderStats(){
       body.appendChild(sum);
       if(totKm>0){
         const km=el("div","card"); km.style.marginTop="12px";
-        km.innerHTML=`<div class="lrow" style="padding:0"><div class="ico">📍</div><div class="main"><div class="t">Total distance (estimated)</div><div class="s">across all cardio sessions</div></div><div class="num" style="font-family:'Bebas Neue';font-size:30px;color:var(--blue)">${totKm.toFixed(1)} km</div></div>`;
+        km.innerHTML=`<div class="lrow" style="padding:0"><div class="ico">📍</div><div class="main"><div class="t">Total distance (estimated)</div><div class="s">across all cardio sessions</div></div><div class="num" style="font-family:var(--font-display);font-size:30px;color:var(--blue)">${totKm.toFixed(1)} km</div></div>`;
         body.appendChild(km);
       }
       const cc=el("div","card"); cc.style.marginTop="12px";
@@ -4061,7 +4062,7 @@ const HISTORY_330={num:"3.30-test",title:"Rebuilt food logger",items:[
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px">
-      <span style="font-family:'Bebas Neue';font-size:22px;color:var(--strength)">v${num}</span>
+      <span style="font-family:var(--font-display);font-size:22px;color:var(--strength)">v${num}</span>
       <span style="font-weight:700;font-size:14px">${name}</span></div>
     <div class="muted" style="font-size:13px;line-height:1.65">${items.map(i=>"• "+i).join("<br>")}</div></div>`;
   openModal(`<h3>Changelog 📜</h3>
@@ -4472,14 +4473,14 @@ function renderMore(){
 
     const plain=el("div","card"); plain.style.marginTop="12px";
     plain.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">💾 Backup code</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Simple copy/paste backup. Useful for quick manual saves, but encrypted backup files are better for cloud storage.</p>`;
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Simple copy/paste backup. Useful for quick manual saves, but it is not encrypted — anyone with the code can restore/read your data. Use encrypted backup files for cloud storage.</p>`;
     const exb=el("button","btn block","Export backup code"); exb.addEventListener("click",openExport);
     const imb=el("button","btn ghost block","Import / restore from code"); imb.style.marginTop="10px"; imb.addEventListener("click",openImport);
     plain.append(exb,imb); body.appendChild(plain);
 
     const rem=el("div","card"); rem.style.marginTop="12px";
     rem.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔔 Backup reminders</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve reminds you. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve checks for due backups when you open or return to the app. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
       <div class="seg scroll" id="bk_freq" style="margin-bottom:10px">
         ${[["off","Off"],["daily","Daily"],["weekly","Weekly"],["biweekly","Biweekly"],["monthly","Monthly"]].map(([v,l])=>`<button data-v="${v}" class="${(DATA.meta.backupReminder||"weekly")===v?"on":""}">${l}</button>`).join("")}
       </div>`;
@@ -4513,7 +4514,7 @@ function renderMore(){
 
   /* ---- DANGER ZONE ---- */
   function buildDanger(body){
-    body.appendChild(el("p","tiny muted","Erasing wipes everything on this device and can't be undone. Unlock first, then confirm — two steps so it can't happen by accident.")).style.margin="0 0 12px";
+    body.appendChild(el("p","tiny muted","Erasing wipes Evolve data on this device and can't be undone. Unlock first, then confirm — two steps so it can't happen by accident. Other site/app storage on this domain is left alone.")).style.margin="0 0 12px";
     let resetUnlocked=false;
     const unlockBtn=el("button","btn block","🔒 Unlock reset");
     const reset=el("button","btn danger-solid block","Reset all data"); reset.style.marginTop="10px"; reset.disabled=true;
@@ -4525,10 +4526,9 @@ function renderMore(){
     reset.addEventListener("click",()=>{
       if(reset.disabled)return;
       confirmModal({title:"Erase all data?",danger:true,confirmText:"Erase everything",
-        body:"This wipes all Evolve data on this device — workouts, food, weight and settings — and can't be undone. Export a backup first if you're unsure.",
+        body:"This wipes Evolve data on this device — workouts, food, weight, settings, profile photo, progress photos and any active workout — and can't be undone. Export a backup first if you're unsure.",
         onConfirm:()=>{
-          try{localStorage.removeItem(KEY);}catch(e){}
-          try{localStorage.clear();}catch(e){}
+          clearEvolveStorage();
           DATA=JSON.parse(JSON.stringify(DEFAULT_DATA)); DATA.meta.created=todayISO();
           location.reload();
         }});
@@ -4564,6 +4564,20 @@ function renderMore(){
   b.lastChild.style.padding="18px 0 4px";
 }
 
+function isPlainObject(x){return !!x && typeof x==="object" && !Array.isArray(x);}
+function prepareRestoredData(obj){
+  if(!isPlainObject(obj)) throw new Error("bad-backup");
+  const arrayKeys=["customFoods","favFoods","favMachines","favExercises","favWorkouts","routines","cardio","workouts","weights"];
+  arrayKeys.forEach(k=>{ if(k in obj && !Array.isArray(obj[k])) throw new Error("bad-backup:"+k); });
+  const objectKeys=["prefs","log","ach","statResets","meta"];
+  objectKeys.forEach(k=>{ if(k in obj && !isPlainObject(obj[k])) throw new Error("bad-backup:"+k); });
+  if("profile" in obj && obj.profile!==null && !isPlainObject(obj.profile)) throw new Error("bad-backup:profile");
+  if("targets" in obj && obj.targets!==null && !isPlainObject(obj.targets)) throw new Error("bad-backup:targets");
+  if(!("workouts" in obj) && !("log" in obj) && !("weights" in obj)) throw new Error("bad-backup:empty");
+  const restored=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj);
+  migrate(restored);
+  return restored;
+}
 function cleanBackupData(){
   const copy=JSON.parse(JSON.stringify(DATA));
   if(copy.meta){
@@ -4594,17 +4608,16 @@ async function decryptEncryptedBackupText(text,password){
   const key=await deriveBackupKey(password,b64ToBytes(box.salt));
   const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64ToBytes(box.iv)},key,b64ToBytes(box.data));
   const obj=JSON.parse(new TextDecoder().decode(plain));
-  if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad-backup");
-  return obj;
+  return prepareRestoredData(obj);
 }
-async function saveOrShareBlob(blob,name,title="Evolve backup",text="Evolve backup file"){
+async function saveOrShareBlob(blob,name,title="Evolve file",text="Evolve file",sharedMsg="File shared",savedMsg="File saved"){
   try{
     if(navigator.share && typeof File!=="undefined"){
       const file=new File([blob],name,{type:blob.type||"application/octet-stream"});
-      if(!navigator.canShare || navigator.canShare({files:[file]})){await navigator.share({title,text,files:[file]}); toast("Backup shared"); return;}
+      if(!navigator.canShare || navigator.canShare({files:[file]})){await navigator.share({title,text,files:[file]}); toast(sharedMsg); return;}
     }
   }catch(e){}
-  try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast("Backup file saved");}
+  try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast(savedMsg);}
   catch(e){toast("Couldn't save file here");}
 }
 /* v3.31 — CSV exports (records only; not an encrypted/restorable backup) */
@@ -4625,7 +4638,7 @@ function exportWorkoutsCSV(){
     });
     if(!(w.exercises||[]).length) rows.push([w.date,w.title||"",w.type||"","(no exercises logged)","","","","",""]);
   });
-  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-workouts-"+todayISO()+".csv","Evolve workouts","Evolve workout history (CSV)");
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-workouts-"+todayISO()+".csv","Evolve workouts","Evolve workout history (CSV)","Workouts CSV shared","Workouts CSV saved");
 }
 function exportFoodCSV(){
   const rows=[["Date","Meal","Food","Grams",eUnit(),"Protein (g)","Carbs (g)","Fat (g)"]];
@@ -4636,7 +4649,7 @@ function exportFoodCSV(){
       rows.push([d,(mealById(mealOf(f))||{}).name||"",f.name,Math.round(f.grams||0),eVal(f.kcal||0),Math.round((f.p||0)*10)/10,Math.round((f.c||0)*10)/10,Math.round((f.f||0)*10)/10]);
     });
   });
-  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-food-"+todayISO()+".csv","Evolve food log","Evolve food log (CSV)");
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-food-"+todayISO()+".csv","Evolve food log","Evolve food log (CSV)","Food CSV shared","Food CSV saved");
 }
 function openEncryptedExport(){
   if(!backupCryptoReady()){toast("Encryption is not available in this browser");return;}
@@ -4657,7 +4670,7 @@ function openEncryptedExportPassword(){
   $("#enc_make").addEventListener("click",async()=>{
     const p=$("#enc_pw").value, p2=$("#enc_pw2").value;
     if(p.length<8){toast("Use at least 8 characters");return;} if(p!==p2){toast("Passwords do not match");return;}
-    try{const text=await makeEncryptedBackupText(p); DATA.meta.lastBackup=todayISO(); save(); closeModal(); await saveOrShareBlob(new Blob([text],{type:"application/json"}),`evolve-encrypted-backup-${todayISO()}.json`,"Evolve encrypted backup","Encrypted Evolve backup");}
+    try{const text=await makeEncryptedBackupText(p); DATA.meta.lastBackup=todayISO(); save(); closeModal(); await saveOrShareBlob(new Blob([text],{type:"application/json"}),`evolve-encrypted-backup-${todayISO()}.json`,"Evolve encrypted backup","Encrypted Evolve backup","Encrypted backup shared","Encrypted backup file saved");}
     catch(e){toast("Couldn't create encrypted backup");}
   });
 }
@@ -4672,7 +4685,7 @@ function openEncryptedRestoreText(text){
     <div class="field"><label>Password</label><input class="input" id="dec_pw" type="password" autocomplete="current-password"></div>
     <button class="btn danger-solid block" id="dec_go">Decrypt & restore</button>`);
   $("#dec_go").addEventListener("click",async()=>{
-    try{const obj=await decryptEncryptedBackupText(text,$("#dec_pw").value); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
+    try{DATA=await decryptEncryptedBackupText(text,$("#dec_pw").value); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
     catch(e){toast("Couldn't decrypt — check the password/file");}
   });
 }
@@ -4720,9 +4733,8 @@ function openImport(){
     raw=raw.replace(/^\s*EVOLVE\d*\s*:\s*/i,"").replace(/\s+/g,""); /* drop optional EVOLVE1: tag (any case) + any stray spaces/line breaks */
     try{
       const obj=JSON.parse(decodeURIComponent(escape(atob(raw))));
-      if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad");
-      DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj);
-      migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
+      DATA=prepareRestoredData(obj);
+      save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
     }catch(e){ toast("That code didn't work — check you copied all of it"); }
   });
 }
