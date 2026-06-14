@@ -400,6 +400,8 @@ function deleteProgressPhoto(id, after){
   setProgressPhotos(arr); if(after)after();
 }
 
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
 /* modal system — every modal gets a sticky × close button and is dismissable
    via the × , the dimmed background, or the device/gesture Back button. */
 let _modalOpen=false, _ignorePop=false, _modalLocked=false;
