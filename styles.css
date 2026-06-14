@@ -196,11 +196,16 @@ select.input{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg 
 .lg-plate-empty{text-align:center;padding:10px 4px 2px;line-height:1.5}
 .lg-plate-head{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px;margin-bottom:8px;gap:10px}
 .lg-plate-head .num{color:var(--muted);font-weight:600;font-size:12px}
-.lg-plate-items{max-height:22vh;overflow-y:auto;margin-bottom:10px}
-.lg-pi{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.lg-plate-items{max-height:34vh;overflow-y:auto;margin-bottom:10px}
+.lg-pi{display:flex;flex-direction:column;padding:7px 0;border-top:1px solid var(--line)}
 .lg-pi:first-child{border-top:none}
+.lg-pi-row{display:flex;align-items:center;gap:8px}
+.lg-pi-main{cursor:pointer}
 .lg-pi .fn{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lg-pi .fm{font-size:12px;color:var(--muted)}
+.lg-pi-edit{width:100%;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line2)}
+.lg-pi-edit .row.wrap{margin:0 0 8px}
+.lg-pi-edit .chip.sm{flex:0 0 auto}
 .su-units{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 /* progress ring + bars */

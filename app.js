@@ -2985,7 +2985,7 @@ function openFoodSearch(presetMeal){
     if(!plate.length){ host.innerHTML=`<div class="lg-plate-empty tiny muted">Your plate is empty — tap ＋ on any food to build a meal, then log it all at once.</div>`; return; }
     const t=plateTotals();
     host.innerHTML=`<div class="lg-plate-head"><span>🍽️ Plate · ${plate.length} item${plate.length>1?"s":""}</span><span class="num">${eVal(t.kcal)} ${eUnit()} · P${Math.round(t.p)} C${Math.round(t.c)} F${Math.round(t.f)}</span></div>
-      <div class="lg-plate-items">${plate.map((it,i)=>{const r=it.grams/100;return `<div class="lg-pi"><div class="lg-pi-main" data-pe="${i}" style="flex:1;min-width:0;cursor:pointer"><div class="fn">${esc(it.name)}</div><div class="fm num">${it.grams}g · ${eVal(it.f[1]*r)} ${eUnit()} · tap to adjust</div></div><button class="iconbtn" data-pe="${i}" title="Portion">⚙</button><button class="iconbtn" data-pr="${i}" title="Remove">✕</button></div>`;}).join("")}</div>
+      <div class="lg-plate-items">${plate.map((it,i)=>{const r=it.grams/100;return `<div class="lg-pi"><div class="lg-pi-row"><div class="lg-pi-main" data-pe="${i}" style="flex:1;min-width:0"><div class="fn">${esc(it.name)}</div><div class="fm num">${it.grams}g · ${eVal(it.f[1]*r)} ${eUnit()} · tap to adjust</div></div><button class="iconbtn" data-pe="${i}" title="Portion">⚙</button><button class="iconbtn" data-pr="${i}" title="Remove">✕</button></div></div>`;}).join("")}</div>
       <button class="btn fuel block" id="lg_logall">Log ${plate.length} item${plate.length>1?"s":""} to ${mealById(plateMeal).name}</button>`;
     host.querySelectorAll("[data-pr]").forEach(b=>b.addEventListener("click",()=>{ plate.splice(+b.dataset.pr,1); paintPlate(); }));
     host.querySelectorAll("[data-pe]").forEach(b=>b.addEventListener("click",()=>editPlatePortion(+b.dataset.pe)));
@@ -3018,7 +3018,7 @@ function editPlatePortion(i){
   if(row.querySelector(".lg-pi-edit")){ row.querySelector(".lg-pi-edit").remove(); return; }
   const port=foodPortionFor(it.name);
   const chips=[];
-  if(port) chips.push([`1 ${port.unit}`, Math.round(port.grams)]);
+  if(port) chips.push([port.unit, Math.round(port.grams)]);
   [50,100,150,200,250].forEach(g=>chips.push([g+"g",g]));
   const ed=document.createElement("div"); ed.className="lg-pi-edit";
   ed.innerHTML=`<div class="row wrap" style="gap:6px;margin:6px 0">${chips.map(([l,g])=>`<button class="chip sm" data-g="${g}">${esc(l)}</button>`).join("")}</div>
