@@ -821,7 +821,8 @@ const TAB_HELP={
   fuel:{t:"Fuel",b:`<div class="help-body">
     <p class="help-lead">Your nutrition for the day — calories, macros and water.</p>
     <div class="help-row"><b>Rings</b><span>Big ring = calories left; smaller rings track <b style="color:#FF6A2C">protein</b>, <b style="color:#5AA9FF">carbs</b> and <b style="color:#FFC857">fat</b>.</span></div>
-    <div class="help-row"><b>＋ Add food</b><span>Log into Breakfast, Lunch, Dinner or Snacks; recent &amp; favourite ★ foods sit on top.</span></div>
+    <div class="help-row"><b>＋ Add food</b><span>Opens the logger — pick a meal, search, and tap ＋ to drop foods onto a <b>plate</b>. Recent &amp; favourite ★ foods sit on top.</span></div>
+    <div class="help-row"><b>The plate</b><span>Build a whole meal, then <b>Log all at once</b>. Tap a plate item's name or ⚙ to adjust its portion; ✕ removes it.</span></div>
     <div class="help-row"><b>Edit a food</b><span>Tap any logged item to edit, duplicate or remove it.</span></div>
     <div class="help-row"><b>Repeat a meal</b><span>Copy a meal from another day in one tap.</span></div>
     <div class="help-row"><b>🔥 Burned</b><span>Adds exercise calories back to your budget (toggle in More → Preferences).</span></div>
@@ -2907,49 +2908,136 @@ function foodSearchScore(name,raw){
   if(q.length>=4 && words.some(w=>tinyDistance(w,q)<=1))return 10;
   return 999;
 }
+/* ===========================================================================
+   v3.30 — Plate-based food logger (overhaul)
+   Add many foods to a running "plate", adjust portions inline, then Log all.
+   Reuses the existing food DB, fuzzy search, favourites, recents & portions.
+   =========================================================================== */
+let plate=[];            /* [{name, grams, f:[name,kcal,p,c,f,cat]}] */
+let plateMeal="snack";   /* meal the whole plate logs into */
+let catsOpen=false;      /* category filter collapsed by default */
+
+function plateTotals(){
+  return plate.reduce((t,it)=>{ const r=it.grams/100,f=it.f;
+    t.kcal+=f[1]*r; t.p+=f[2]*r; t.c+=f[3]*r; t.f+=f[4]*r; return t; },{kcal:0,p:0,c:0,f:0});
+}
+function addToPlate(name,grams){
+  const f=allFoods().find(x=>x[0]===name); if(!f)return;
+  const g=grams||lastPortion(name)||100;
+  plate.push({name,grams:g,f}); paintPlate(); paintList&&paintList();
+  toast(name+" → plate");
+}
 function openFoodSearch(presetMeal){
+  plate=[]; foodCat="All"; catsOpen=false;
+  plateMeal=presetMeal||suggestMeal();
   const base=Array.from(new Set(FOODS.map(f=>f[5])));
   const hasFav=(DATA.favFoods&&DATA.favFoods.length);
   const cats=["All",...(hasFav?["★ Favourites"]:[]),...((DATA.customFoods&&DATA.customFoods.length)?["My foods"]:[]),...base];
-  openModal(`<h3>Add food</h3>
-    <input class="input" id="fs_q" placeholder="Search 700+ foods…" style="margin:6px 0 8px">
-    <button class="btn block" id="fs_custom" style="margin-bottom:10px">＋ Add your own food</button>
-    <div id="fs_recent"></div>
-    <div class="row wrap" style="gap:6px;margin-bottom:8px">${cats.map(c=>`<button class="chip sm ${c==="All"?"on":""}" data-c="${c}">${c}</button>`).join("")}</div>
-    <div class="search-list" id="fs_list"></div>`);
-  foodCat="All";
-  /* recent & frequent quick-add chips (hidden while searching / when filtering) */
+
+  openModal(`<div class="logger">
+    <div class="lg-top">
+      <h3 style="margin:0 0 8px">Add food</h3>
+      <div class="lg-meal" id="lg_meal">${MEALS.map(m=>`<button class="chip sm ${m.id===plateMeal?"on":""}" data-m="${m.id}">${m.ic} ${m.name}</button>`).join("")}</div>
+      <input class="input" id="fs_q" placeholder="Search ${FOODS.length}+ foods…" style="margin:10px 0 8px" autocomplete="off">
+      <div class="lg-actions">
+        <button class="chip sm" id="fs_custom">＋ Own food</button>
+        <button class="chip sm" id="fs_catsT">▾ Categories</button>
+      </div>
+      <div id="fs_cats" class="lg-cats" style="display:none">${cats.map(c=>`<button class="chip sm ${c==="All"?"on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    </div>
+    <div class="lg-scroll">
+      <div id="fs_recent"></div>
+      <div class="search-list" id="fs_list"></div>
+    </div>
+    <div class="lg-plate" id="lg_plate"></div>
+  </div>`);
+
   function paintRecent(){
     const host=$("#fs_recent"); if(!host)return;
     const q=$("#fs_q").value.trim();
-    const recents=recentFoods(8);
+    const recents=recentFoods(10);
     if(q||foodCat!=="All"||!recents.length){ host.innerHTML=""; return; }
-    host.innerHTML=`<div class="eyebrow" style="margin:2px 0 8px">Recent & frequent</div>
-      <div class="row wrap" style="gap:7px;margin-bottom:12px">${recents.map(n=>`<button class="chip sm" data-recent="${esc(n)}">${isFavFood(n)?"★ ":""}${esc(n)}</button>`).join("")}</div>`;
-    host.querySelectorAll("[data-recent]").forEach(b=>b.addEventListener("click",()=>pickFood(b.getAttribute("data-recent"),presetMeal)));
+    host.innerHTML=`<div class="eyebrow" style="margin:2px 0 8px">Recent &amp; frequent</div>
+      <div class="row wrap" style="gap:7px;margin-bottom:6px">${recents.map(n=>`<button class="chip sm plus" data-recent="${esc(n)}">${isFavFood(n)?"★ ":""}${esc(n)} <b>＋</b></button>`).join("")}</div>`;
+    host.querySelectorAll("[data-recent]").forEach(b=>b.addEventListener("click",()=>addToPlate(b.getAttribute("data-recent"))));
   }
-  function paint(){
+  window.paintList=function(){
     const raw=$("#fs_q").value.trim();
     let pool=allFoods();
     if(foodCat==="★ Favourites") pool=pool.filter(f=>isFavFood(f[0]));
-    else if(foodCat!=="All") pool=pool.filter(f=>f[5]===foodCat);
+    else if(foodCat!=="All"&&foodCat!=="★ Favourites") pool=pool.filter(f=>f[5]===foodCat);
     const list=raw
       ? pool.map(f=>({f,score:foodSearchScore(f[0],raw)})).filter(x=>x.score<999)
           .sort((a,b)=>a.score-b.score || a.f[0].localeCompare(b.f[0])).slice(0,150).map(x=>x.f)
       : pool.slice(0,150);
     $("#fs_list").innerHTML=list.map(f=>`<div class="food-opt" data-n="${esc(f[0])}">
-      <div style="flex:1"><div class="fn">${esc(f[0])}${f[5]==="My foods"?' <span class="tiny" style="color:var(--fuel)">· custom</span>':''}</div><div class="fm num">${eVal(f[1])} ${eUnit()} · ${macroHTML(f[2],f[3],f[4])} /100g${foodPortionLabel(f[0])}</div></div>
+      <div style="flex:1;min-width:0"><div class="fn">${esc(f[0])}${f[5]==="My foods"?' <span class="tiny" style="color:var(--fuel)">· custom</span>':''}</div>
+        <div class="fm num">${eVal(f[1])} ${eUnit()} · ${macroHTML(f[2],f[3],f[4])} /100g${foodPortionLabel(f[0])}</div></div>
       <button class="iconbtn star ${isFavFood(f[0])?"on":""}" data-fav="${esc(f[0])}" title="Favourite">${isFavFood(f[0])?"★":"☆"}</button>
-      <button class="btn sm fuel" data-pick="${esc(f[0])}" style="margin-left:6px">Add</button></div>`).join("")||`<div class="empty">${foodCat==="★ Favourites"?"No favourites yet — tap ☆ on any food to save it.":"No matches — typo-tolerant search is on, but you can also add your own food."}</div>`;
-    $("#fs_list").querySelectorAll("[data-pick]").forEach(btn=>btn.addEventListener("click",()=>pickFood(btn.getAttribute("data-pick"),presetMeal)));
+      <button class="btn sm fuel" data-plus="${esc(f[0])}" style="margin-left:6px">＋</button></div>`).join("")
+      ||`<div class="empty">${foodCat==="★ Favourites"?"No favourites yet — tap ☆ on any food to save it.":"No matches — try fewer letters, or add your own food."}</div>`;
+    $("#fs_list").querySelectorAll("[data-plus]").forEach(btn=>btn.addEventListener("click",()=>addToPlate(btn.getAttribute("data-plus"))));
     $("#fs_list").querySelectorAll("[data-fav]").forEach(btn=>btn.addEventListener("click",()=>{ const n=btn.getAttribute("data-fav"); toggleFavFood(n); const on=isFavFood(n); btn.classList.toggle("on",on); btn.textContent=on?"★":"☆"; }));
-  }
-  $("#fs_q").addEventListener("input",()=>{paintRecent();paint();});
+  };
+
+  window.paintPlate=function(){
+    const host=$("#lg_plate"); if(!host)return;
+    if(!plate.length){ host.innerHTML=`<div class="lg-plate-empty tiny muted">Your plate is empty — tap ＋ on any food to build a meal, then log it all at once.</div>`; return; }
+    const t=plateTotals();
+    host.innerHTML=`<div class="lg-plate-head"><span>🍽️ Plate · ${plate.length} item${plate.length>1?"s":""}</span><span class="num">${eVal(t.kcal)} ${eUnit()} · P${Math.round(t.p)} C${Math.round(t.c)} F${Math.round(t.f)}</span></div>
+      <div class="lg-plate-items">${plate.map((it,i)=>{const r=it.grams/100;return `<div class="lg-pi"><div class="lg-pi-main" data-pe="${i}" style="flex:1;min-width:0;cursor:pointer"><div class="fn">${esc(it.name)}</div><div class="fm num">${it.grams}g · ${eVal(it.f[1]*r)} ${eUnit()} · tap to adjust</div></div><button class="iconbtn" data-pe="${i}" title="Portion">⚙</button><button class="iconbtn" data-pr="${i}" title="Remove">✕</button></div>`;}).join("")}</div>
+      <button class="btn fuel block" id="lg_logall">Log ${plate.length} item${plate.length>1?"s":""} to ${mealById(plateMeal).name}</button>`;
+    host.querySelectorAll("[data-pr]").forEach(b=>b.addEventListener("click",()=>{ plate.splice(+b.dataset.pr,1); paintPlate(); }));
+    host.querySelectorAll("[data-pe]").forEach(b=>b.addEventListener("click",()=>editPlatePortion(+b.dataset.pe)));
+    $("#lg_logall").addEventListener("click",commitPlate);
+  };
+
+  $("#fs_q").addEventListener("input",()=>{paintRecent();paintList();});
   $("#fs_custom").addEventListener("click",()=>openCustomFood(presetMeal));
-  $("#modal").querySelectorAll("[data-c]").forEach(b=>b.addEventListener("click",()=>{
-    $("#modal").querySelectorAll("[data-c]").forEach(x=>x.classList.remove("on"));b.classList.add("on");foodCat=b.dataset.c;paintRecent();paint();}));
-  paintRecent(); paint();
+  $("#fs_catsT").addEventListener("click",()=>{ catsOpen=!catsOpen; $("#fs_cats").style.display=catsOpen?"flex":"none"; $("#fs_catsT").classList.toggle("on",catsOpen); });
+  $("#lg_meal").querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>{ plateMeal=b.dataset.m; $("#lg_meal").querySelectorAll("[data-m]").forEach(x=>x.classList.remove("on")); b.classList.add("on"); paintPlate(); }));
+  $("#fs_cats").querySelectorAll("[data-c]").forEach(b=>b.addEventListener("click",()=>{
+    $("#fs_cats").querySelectorAll("[data-c]").forEach(x=>x.classList.remove("on"));b.classList.add("on");foodCat=b.dataset.c;paintRecent();paintList();}));
+  paintRecent(); paintList(); paintPlate();
 }
+
+/* adjust a food's portion BEFORE adding to the plate — inline prompt, no nested modal */
+function portionToPlate(name){
+  const f=allFoods().find(x=>x[0]===name); if(!f)return;
+  const def=lastPortion(name);
+  const port=foodPortionFor(name);
+  const hint=port?` (1 ${port.unit} ≈ ${Math.round(port.grams)}g)`:"";
+  const g=parseFloat(prompt(`How many grams of ${name}?${hint}`, def));
+  if(g>0) addToPlate(name,g);
+}
+/* edit the portion of an item already on the plate — inline grams stepper row */
+function editPlatePortion(i){
+  const it=plate[i]; if(!it)return;
+  const host=$("#lg_plate"); if(!host)return;
+  const row=host.querySelectorAll(".lg-pi")[i]; if(!row) return;
+  if(row.querySelector(".lg-pi-edit")){ row.querySelector(".lg-pi-edit").remove(); return; }
+  const port=foodPortionFor(it.name);
+  const chips=[];
+  if(port) chips.push([`1 ${port.unit}`, Math.round(port.grams)]);
+  [50,100,150,200,250].forEach(g=>chips.push([g+"g",g]));
+  const ed=document.createElement("div"); ed.className="lg-pi-edit";
+  ed.innerHTML=`<div class="row wrap" style="gap:6px;margin:6px 0">${chips.map(([l,g])=>`<button class="chip sm" data-g="${g}">${esc(l)}</button>`).join("")}</div>
+    <div class="row" style="gap:8px;align-items:center"><input class="input num" id="lg_pg" type="number" inputmode="decimal" value="${it.grams}" style="flex:1"><button class="btn sm fuel" id="lg_pset">Set</button></div>`;
+  row.appendChild(ed);
+  ed.querySelectorAll("[data-g]").forEach(b=>b.addEventListener("click",()=>{ ed.querySelector("#lg_pg").value=b.dataset.g; }));
+  ed.querySelector("#lg_pset").addEventListener("click",()=>{ const g=+ed.querySelector("#lg_pg").value; if(g>0){ it.grams=g; paintPlate(); } });
+}
+
+/* commit the whole plate to the day's log in one go */
+function commitPlate(){
+  if(!plate.length){ toast("Plate is empty"); return; }
+  const meal=plateMeal;
+  const log=dayLog(viewDate);
+  plate.forEach(it=>{ const r=it.grams/100, f=it.f;
+    log.food.push({name:it.name,grams:it.grams,kcal:f[1]*r,p:f[2]*r,c:f[3]*r,f:f[4]*r,meal,time:Date.now()}); });
+  const n=plate.length; plate=[]; save(); closeModal(); renderFuel(); toast(`Logged ${n} item${n>1?"s":""} to ${mealById(meal).name}`);
+}
+
 function openCustomFood(presetMeal){
   openModal(`<h3>Add your own food</h3>
     <p class="muted tiny" style="margin-bottom:12px">Enter the values <b>per 100g</b> (check the packet). It's saved so you can reuse it any time.</p>
@@ -3735,14 +3823,15 @@ function backupReminder(){
   $("#wf_later").addEventListener("click",closeModal);
 }
 const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.29-test";
-const LATEST_TITLE="Test package: simple encrypted cloud save";
+const LATEST_NUM="3.30-test";
+const LATEST_TITLE="Test package: rebuilt food logger";
 const LATEST_ITEMS=[
-  "<b>Simpler cloud-safe backups</b> — Evolve now creates an encrypted backup file locally, then opens your phone's normal Save/Share sheet so you choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA or anywhere else.",
-  "<b>No Google setup needed</b> — the awkward Google OAuth / Client ID flow has been removed from the main app. No account connection is needed inside Evolve.",
-  "<b>Privacy wording tightened</b> — Evolve explains before export that the file may leave the device if you save it to cloud storage, but Evolve itself does not upload it or know where you store it.",
-  "<b>Encrypted restore kept</b> — restore from the encrypted file using the password; wrong passwords fail safely.",
-  "<b>Backup reminders kept</b> — choose <b>Off</b>, <b>Daily</b>, <b>Weekly</b>, <b>Biweekly</b> or <b>Monthly</b>, with an in-app reminder and a <b>Send test notification</b> button."
+  "<b>New plate-based logger</b> — add several foods to a running plate, adjust each portion, then log the whole meal at once. No more re-opening search between every item.",
+  "<b>Results show first</b> — when you search, matches appear straight away; the food categories are tucked behind a <b>▾ Categories</b> toggle so they no longer push results down the screen.",
+  "<b>Recent &amp; frequent up top</b> — your usual foods are one tap away (with a ＋) before you type anything.",
+  "<b>Tap to adjust</b> — on the plate, tap a food's name or its ⚙ to change the portion inline; ✕ removes it.",
+  "<b>Backup reminders fixed</b> — the Off/Daily/Weekly/Biweekly/Monthly row now scrolls sideways instead of overflowing the edge.",
+  "Everything from 3.29 (encrypted backups, reminders, profile photos) is unchanged underneath."
 ];
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
@@ -3754,6 +3843,12 @@ function openChangelog(){
     <div class="tiny muted" style="margin:-4px 0 10px">Last updated ${LAST_UPDATED}</div>
     <div style="max-height:62vh;overflow:auto;margin-top:4px">
     ${v(LATEST_NUM,LATEST_TITLE,LATEST_ITEMS)}
+    ${v("3.29-test","Simple encrypted cloud save",[
+      "<b>Simpler cloud-safe backups</b> — Evolve creates an encrypted backup file locally, then opens your phone's Save/Share sheet so you choose iCloud, Files, Drive or anywhere.",
+      "<b>No Google setup needed</b> — the OAuth / Client ID flow was removed from the main app.",
+      "<b>Encrypted restore</b> — restore from the file using your password; wrong passwords fail safely.",
+      "<b>Backup reminders</b> — Off / Daily / Weekly / Biweekly / Monthly, with an in-app reminder and a test notification."
+    ])}
     ${v("3.22","Polish across every tab",[
       "<b>New nav bar</b> — Home now sits in the centre, raised and bordered in your theme colour, with Settings on the far right",
       "<b>Tidier Progress</b> — sections are grouped into <b>Trends</b>, <b>Activity</b> and <b>Goals &amp; milestones</b>, with <b>Expand / Collapse all</b>",
@@ -4159,7 +4254,7 @@ function renderMore(){
     const rem=el("div","card"); rem.style.marginTop="12px";
     rem.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔔 Backup reminders</div>
       <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve reminds you. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
-      <div class="seg" id="bk_freq" style="margin-bottom:10px">
+      <div class="seg scroll" id="bk_freq" style="margin-bottom:10px">
         ${[["off","Off"],["daily","Daily"],["weekly","Weekly"],["biweekly","Biweekly"],["monthly","Monthly"]].map(([v,l])=>`<button data-v="${v}" class="${(DATA.meta.backupReminder||"weekly")===v?"on":""}">${l}</button>`).join("")}
       </div>`;
     const notif=el("button","btn block",DATA.meta.backupNotifications?"Notifications enabled":"Enable backup notifications"); notif.addEventListener("click",requestBackupNotifications);
@@ -4232,7 +4327,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.29-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.30-test`));
   b.lastChild.style.padding="18px 0 4px";
 }
 
