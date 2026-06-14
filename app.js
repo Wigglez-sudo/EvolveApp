@@ -109,6 +109,7 @@ function cardioDistanceKm(name, seconds){
 /* ===================== STATE & STORAGE ===================== */
 const KEY="evolve_v1";
 const PROFILE_PHOTO_KEY="evolve_profile_photo_v1"; /* separate local-only photo; deliberately not included in backup codes */
+const PROGRESS_PHOTOS_KEY="evolve_progress_photos_v1"; /* v3.31: local-only progress gallery; never in backups */
 const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
@@ -119,6 +120,7 @@ const DEFAULT_DATA = {
   favMachines:[], /* legacy machine names (migrated into favExercises) */
   favExercises:[], /* GLOBAL favourites: any exercise/cardio name */
   favWorkouts:[], /* {id,name,exercises:[{name,group}],cardio:{name,met,ic}|null,cardioPos:"start"|"end"} */
+  routines:[], /* v3.31: multi-day programs — {id,name,note,days:[{label,exercises:[{name,group}]}]} */
   weeklyPlan:null, /* {weekStart, days:{Mon:{type,label,done}|null,...}, cardioPref} */
   cardio:[],     /* {id,date,name,type,seconds,kcal,distanceKm} */
   log:{},       /* date -> {food:[], water:0, burned:[]} */
@@ -150,6 +152,9 @@ function migrate(d){
   if(!(Number(d.prefs.waterStep)>0)) d.prefs.waterStep=250;          /* +1 tap water amount (ml) */
   if(!["home","train","fuel","stats","more"].includes(d.prefs.startTab)) d.prefs.startTab="home"; /* tab shown on open */
   if(typeof d.prefs.showHelpBars!=="boolean") d.prefs.showHelpBars=true; /* show the per-tab "How this page works" bars by default */
+  /* v3.31 */
+  if(!Array.isArray(d.routines)) d.routines=[]; /* saved multi-day programs */
+  if(Array.isArray(d.customFoods)) d.customFoods.forEach(f=>{ if(f && typeof f.cat!=="string") f.cat=""; }); /* optional category tag on custom foods */
   if(!d.statResets || typeof d.statResets!=="object") d.statResets={};
   if(!d.meta || typeof d.meta!=="object") d.meta={};
   if(!["off","daily","weekly","biweekly","monthly"].includes(d.meta.backupReminder)) d.meta.backupReminder="weekly";
@@ -361,7 +366,39 @@ function resizeAndSaveProfilePhoto(file){
   reader.readAsDataURL(file);
 }
 
-function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+/* v3.31 — progress photos: local-only, never backed up, like the profile photo */
+function getProgressPhotos(){
+  try{const raw=localStorage.getItem(PROGRESS_PHOTOS_KEY); return raw?JSON.parse(raw):[];}catch(e){return [];}
+}
+function setProgressPhotos(arr){
+  try{localStorage.setItem(PROGRESS_PHOTOS_KEY,JSON.stringify(arr)); return true;}catch(e){return false;}
+}
+function addProgressPhotoFromFile(file, after){
+  const reader=new FileReader();
+  reader.onerror=()=>toast("Couldn't read that photo");
+  reader.onload=()=>{
+    const img=new Image();
+    img.onerror=()=>toast("Couldn't load that photo");
+    img.onload=()=>{
+      const maxW=640; const scale=Math.min(1,maxW/img.width);
+      const w=Math.round(img.width*scale), h=Math.round(img.height*scale);
+      const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
+      const ctx=canvas.getContext("2d"); ctx.fillStyle="#0C0D11"; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img,0,0,w,h);
+      const data=canvas.toDataURL("image/jpeg",0.8);
+      const arr=getProgressPhotos();
+      arr.unshift({id:Date.now(), date:todayISO(), img:data});
+      if(!setProgressPhotos(arr)){toast("Couldn't save photo — storage may be full");return;}
+      if(after)after(); toast("Progress photo saved locally");
+    };
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+function deleteProgressPhoto(id, after){
+  const arr=getProgressPhotos().filter(p=>p.id!==id);
+  setProgressPhotos(arr); if(after)after();
+}
 
 /* modal system — every modal gets a sticky × close button and is dismissable
    via the × , the dimmed background, or the device/gesture Back button. */
@@ -638,8 +675,10 @@ function switchTab(tab){
   if(tab==="fuel")renderFuel();
   if(tab==="stats")renderStats();
   if(tab==="more")renderMore();
+  const fab=$("#fuelFab"); if(fab) fab.classList.toggle("hidden",tab!=="fuel");
 }
 document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+(function(){ const fab=$("#fuelFab"); if(fab) fab.addEventListener("click",()=>openFoodSearch()); })();
 
 /* ===================== STAY AWAKE (Wake Lock) ===================== */
 let wakeLock=null;
@@ -805,11 +844,12 @@ const TAB_HELP={
     <div class="help-row"><b>At a glance</b><span>Streak, workouts and volume — tap to jump to Progress.</span></div>
     <div class="help-row"><b>Bodyweight</b><span>Log today's weight in one tap.</span></div></div>`},
   train:{t:"Train",b:`<div class="help-body">
-    <p class="help-lead">Your workout library — build a session or pick a ready-made one.</p>
+    <p class="help-lead">Your workout library — build a session, run a saved program, or pick a ready-made one.</p>
     <div class="help-row"><b>Gym / Home</b><span>Toggle where you're training; the exercise pool changes to match.</span></div>
     <div class="help-row"><b>Muscle tiles</b><span>Tap one to build a workout — set how many exercises, focus a sub-muscle, swap any, then Start.</span></div>
-    <div class="help-row"><b>Preset days</b><span>Ready-made sessions you can start straight away.</span></div>
+    <div class="help-row"><b>📋 Programs</b><span>Build a multi-day routine (e.g. Push/Pull/Legs), then start any day with one tap. Open it to view, edit or start a day.</span></div>
     <div class="help-row"><b>Mega</b><span>Mixes several muscle groups in one session, with optional cardio.</span></div>
+    <div class="help-row"><b>★ Saved workouts</b><span>Sessions you've saved as favourites — tap Start to run one again.</span></div>
     <div class="help-row"><b>Favourites ★</b><span>Star any exercise, then the ★ pill builds a session from your favourites.</span></div></div>`},
   cardio:{t:"Cardio",b:`<div class="help-body">
     <p class="help-lead">Track any cardio and log it to your day.</p>
@@ -821,8 +861,10 @@ const TAB_HELP={
   fuel:{t:"Fuel",b:`<div class="help-body">
     <p class="help-lead">Your nutrition for the day — calories, macros and water.</p>
     <div class="help-row"><b>Rings</b><span>Big ring = calories left; smaller rings track <b style="color:#FF6A2C">protein</b>, <b style="color:#5AA9FF">carbs</b> and <b style="color:#FFC857">fat</b>.</span></div>
-    <div class="help-row"><b>＋ Add food</b><span>Opens the logger — pick a meal, search, and tap ＋ to drop foods onto a <b>plate</b>. Recent &amp; favourite ★ foods sit on top.</span></div>
+    <div class="help-row"><b>＋ Add food</b><span>Sits at the top, and a floating <b>＋</b> stays in the corner as you scroll. Pick a meal, search (typo-friendly), and tap ＋ to drop foods onto a <b>plate</b>. Recent &amp; favourite ★ foods sit on top.</span></div>
     <div class="help-row"><b>The plate</b><span>Build a whole meal, then <b>Log all at once</b>. Tap a plate item's name or ⚙ to adjust its portion; ✕ removes it.</span></div>
+    <div class="help-row"><b>Portions</b><span>Common foods show a portion (1 egg, 1 slice); everything can also be set in grams.</span></div>
+    <div class="help-row"><b>Own food</b><span>Add a custom food with macros and an optional category — it's saved under "My foods" to reuse.</span></div>
     <div class="help-row"><b>Edit a food</b><span>Tap any logged item to edit, duplicate or remove it.</span></div>
     <div class="help-row"><b>Repeat a meal</b><span>Copy a meal from another day in one tap.</span></div>
     <div class="help-row"><b>🔥 Burned</b><span>Adds exercise calories back to your budget (toggle in More → Preferences).</span></div>
@@ -832,21 +874,19 @@ const TAB_HELP={
     <p class="help-lead">Your trends and history, grouped so you can find things fast.</p>
     <div class="help-row"><b>Pinned summary</b><span>Last 30 days plus weight, BMI, best streak and total lifted stay at the top.</span></div>
     <div class="help-row"><b>Expand / Collapse all</b><span>Open or close every section at once.</span></div>
-    <div class="help-row"><b>📈 Trends</b><span>Bodyweight, lifting volume, strength per exercise (with est. 1RM), goal weight.</span></div>
-    <div class="help-row"><b>📅 Activity</b><span>Calendar, workout history, cardio and Mega sessions.</span></div>
+    <div class="help-row"><b>📈 Trends</b><span>Bodyweight, progress photos, lifting volume, strength per exercise (with est. 1RM and training % table), goal weight.</span></div>
+    <div class="help-row"><b>📸 Progress photos</b><span>A private photo timeline stored only on this device — never uploaded or backed up.</span></div>
+    <div class="help-row"><b>📅 Activity</b><span>Calendar, workout history, cardio and Mega sessions. Expand a workout to repeat it.</span></div>
     <div class="help-row"><b>🎯 Goals &amp; milestones</b><span>Streaks, daily targets and achievements.</span></div>
     <div class="help-row"><b>Tap to expand</b><span>Open any section; history lists page 5 at a time.</span></div></div>`},
   more:{t:"Settings",b:`<div class="help-body">
-    <p class="help-lead">Make Evolve yours — everything here saves to this device only.</p>
-    <div class="help-row"><b>Profile</b><span>Your body stats, goal and activity level; sets your calorie &amp; macro targets.</span></div>
+    <p class="help-lead">Make Evolve yours — everything here is stored on this device only.</p>
+    <div class="help-row"><b>Profile</b><span>Your body stats, goal and activity level (sets your calorie &amp; macro targets), plus an optional <b>profile photo</b> — local only, never uploaded.</span></div>
     <div class="help-row"><b>Units</b><span>Energy (kcal/kJ), lifting weight (kg/lb) and bodyweight (kg/lb/stone).</span></div>
-    <div class="help-row"><b>Preferences</b><span>Theme, help bars, burned-calorie credit, achievements, meal times, gym equipment, 1RM formula.</span></div>
-    <div class="help-row"><b>Timers</b><span>Default rest length, plus rest-end beep and screen-flash on/off.</span></div>
-    <div class="help-row"><b>Keep screen awake</b><span>Stops the screen dimming while you train (where supported).</span></div>
-    <div class="help-row"><b>Water</b><span>Choose ml or fl oz and how much each tap adds.</span></div>
-    <div class="help-row"><b>Tab on open</b><span>Pick which tab Evolve lands on when you open it.</span></div>
+    <div class="help-row"><b>Preferences</b><span>Theme, achievements, meal times, gym equipment, <b>rest timer</b> (length + end beep &amp; flash), keep-screen-awake, water unit &amp; tap amount, the tab Evolve opens on, the help bars, and your 1RM formula.</span></div>
     <div class="help-row"><b>Stats &amp; resets</b><span>Reset a tracked number to zero or a custom value (unlock first).</span></div>
-    <div class="help-row"><b>Backup &amp; restore</b><span>Export a code to save your data, or import it on another device.</span></div>
+    <div class="help-row"><b>Backup &amp; restore</b><span><b>Encrypted backup</b> — locks your data with a password, then opens your phone's Save/Share sheet (iCloud, Files, Drive, etc.); restore with the same password. <b>Backup reminders</b> (Off→Monthly) with optional notifications. <b>CSV export</b> of workouts or food for your own records.</span></div>
+    <div class="help-row"><b>Help &amp; guide</b><span>This help, the full guide, and the changelog.</span></div>
     <div class="help-row"><b>Danger zone</b><span>Erase everything on this device — two-step, can't be undone.</span></div></div>`}
 };
 function openTabHelp(k){ const h=TAB_HELP[k]; if(!h)return;
@@ -1000,6 +1040,16 @@ function renderTrain(){
   $("#favPill").addEventListener("click",openFavHub);
 
   if(DATA.prefs.env==="gym") renderGymZone(b); else renderHomeZone(b);
+
+  /* routines — multi-day programs */
+  const rtSect=el("div","sect-h",`<h3>📋 Routines</h3>`); b.appendChild(rtSect);
+  const rtCard=el("button","mega-card");
+  const rtCount=(DATA.routines||[]).length;
+  rtCard.innerHTML=`<div class="mega-glow" style="background:radial-gradient(120% 120% at 0% 0%,rgba(169,119,255,.28),transparent 50%),radial-gradient(120% 120% at 100% 100%,rgba(90,169,255,.2),transparent 50%)"></div>
+    <div style="position:relative;z-index:2"><div class="nm disp">PROGRAMS 📋</div>
+    <div class="ct">${rtCount?`${rtCount} saved · tap to open or start a day`:"Build a multi-day plan (e.g. Push / Pull / Legs)"}</div></div>`;
+  rtCard.addEventListener("click",openRoutinesHub);
+  b.appendChild(rtCard);
 
   /* saved favourite workouts */
   if(DATA.favWorkouts&&DATA.favWorkouts.length){
@@ -1497,6 +1547,134 @@ function randomizeFavWorkout(){
   });
 }
 
+/* ===================== ROUTINES — multi-day programs (v3.31) ===================== */
+function openRoutinesHub(){
+  const routines=DATA.routines||[];
+  const list = routines.length
+    ? routines.map(r=>{
+        const dayCount=(r.days||[]).length;
+        return `<div class="rt-card" data-open="${r.id}">
+          <div class="rt-main"><div class="rt-name">${esc(r.name)}</div>
+            <div class="rt-sub">${dayCount} day${dayCount===1?"":"s"}${r.note?` · ${esc(r.note)}`:""}</div></div>
+          <button class="iconbtn" data-del="${r.id}" title="Delete">✕</button></div>`;
+      }).join("")
+    : `<p class="muted tiny" style="margin:4px 0 12px;line-height:1.55">No programs yet. A routine is a multi-day plan (e.g. Push / Pull / Legs) — build one, then start any day with a tap.</p>`;
+  openModal(`<h3>📋 Routines</h3>
+    <p class="muted tiny" style="margin-bottom:12px">Saved multi-day programs. Tap one to view its days and start a session.</p>
+    ${list}
+    <button class="btn str block" id="rt_new" style="margin-top:12px">＋ New routine</button>`);
+  $("#rt_new").addEventListener("click",()=>openRoutineEditor(null));
+  $("#modal").querySelectorAll("[data-open]").forEach(c=>c.addEventListener("click",e=>{
+    if(e.target.closest("[data-del]"))return;
+    const r=(DATA.routines||[]).find(x=>x.id==c.dataset.open); if(r)openRoutineView(r);
+  }));
+  $("#modal").querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{
+    confirmModal({title:"Delete routine?",danger:true,confirmText:"Delete",body:"This removes the whole program. It can't be undone.",
+      onConfirm:()=>{DATA.routines=(DATA.routines||[]).filter(x=>x.id!=b.dataset.del);save();openRoutinesHub();toast("Routine deleted");}});
+  }));
+}
+function openRoutineView(r){
+  const days=(r.days||[]);
+  const dayHTML=days.length?days.map((d,i)=>`<div class="rt-day">
+      <div class="rt-day-head"><div class="rt-day-name">${esc(d.label||("Day "+(i+1)))}</div>
+        <div class="tiny muted">${(d.exercises||[]).length} exercise${(d.exercises||[]).length===1?"":"s"}</div></div>
+      <div class="tiny muted" style="line-height:1.5;margin:2px 0 8px">${(d.exercises||[]).map(e=>esc(e.name)).join(" · ")||"No exercises"}</div>
+      ${(d.exercises||[]).length?`<button class="btn fuel block sm" data-start="${i}">▶ Start ${esc(d.label||("Day "+(i+1)))}</button>`:""}
+    </div>`).join(""):`<p class="muted tiny">This routine has no days yet — tap Edit to add some.</p>`;
+  openModal(`<h3>${esc(r.name)}</h3>
+    ${r.note?`<p class="muted tiny" style="margin-bottom:12px">${esc(r.note)}</p>`:""}
+    ${dayHTML}
+    <button class="btn block" id="rt_edit" style="margin-top:12px">✏️ Edit routine</button>
+    <button class="btn ghost block" id="rt_back" style="margin-top:10px">‹ All routines</button>`);
+  $("#rt_edit").addEventListener("click",()=>openRoutineEditor(r));
+  $("#rt_back").addEventListener("click",openRoutinesHub);
+  $("#modal").querySelectorAll("[data-start]").forEach(b=>b.addEventListener("click",()=>{
+    closeModal(); startRoutineDay(r,+b.dataset.start);
+  }));
+}
+function startRoutineDay(r,i){
+  const d=(r.days||[])[i]; if(!d||!(d.exercises||[]).length){toast("That day has no exercises");return;}
+  const ex=d.exercises.map(e=>{ const m=EX_BY_NAME[e.name]; return m?mkExercise(e.name):{name:e.name,group:e.group||"",sets:[blankSet()]}; });
+  startSession(r.name+" · "+(d.label||("Day "+(i+1))),"routine",ex);
+}
+/* working draft while editing a routine */
+let routineDraft=null;
+function openRoutineEditor(existing){
+  routineDraft = existing
+    ? JSON.parse(JSON.stringify(existing))
+    : {id:Date.now(), name:"", note:"", days:[]};
+  paintRoutineEditor();
+}
+function paintRoutineEditor(){
+  const r=routineDraft;
+  const daysHTML=(r.days||[]).map((d,i)=>`<div class="rt-edit-day">
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:6px">
+        <input class="input" data-dayname="${i}" value="${esc(d.label||"")}" placeholder="Day ${i+1} name (e.g. Push)" style="flex:1">
+        <button class="iconbtn" data-dayrm="${i}" title="Remove day">✕</button>
+      </div>
+      <div class="tiny muted" style="line-height:1.5;margin-bottom:6px">${(d.exercises||[]).map(e=>esc(e.name)).join(" · ")||"No exercises yet"}</div>
+      <button class="btn sm" data-dayex="${i}">＋ Add / edit exercises</button>
+    </div>`).join("");
+  openModal(`<h3>${routineDraft._isNew===false?"Edit":""} Routine</h3>
+    <div class="field"><label>Program name</label><input class="input" id="rt_name" value="${esc(r.name||"")}" placeholder="e.g. PPL — 6 day"></div>
+    <div class="field"><label>Note (optional)</label><input class="input" id="rt_note" value="${esc(r.note||"")}" placeholder="e.g. 6 weeks, then deload"></div>
+    <div class="eyebrow" style="margin:6px 0 8px">Days</div>
+    <div id="rt_days">${daysHTML||'<p class="muted tiny" style="margin:0 0 8px">No days yet — add your first below.</p>'}</div>
+    <button class="btn block" id="rt_addday" style="margin-top:4px">＋ Add a day</button>
+    <button class="btn str block" id="rt_save" style="margin-top:14px">Save routine</button>`);
+  const syncFields=()=>{ routineDraft.name=$("#rt_name").value; routineDraft.note=$("#rt_note").value;
+    (routineDraft.days||[]).forEach((d,i)=>{ const inp=$("#modal").querySelector(`[data-dayname="${i}"]`); if(inp)d.label=inp.value; }); };
+  $("#rt_addday").addEventListener("click",()=>{ syncFields(); routineDraft.days.push({label:"",exercises:[]}); paintRoutineEditor(); });
+  $("#modal").querySelectorAll("[data-dayrm]").forEach(b=>b.addEventListener("click",()=>{ syncFields(); routineDraft.days.splice(+b.dataset.dayrm,1); paintRoutineEditor(); }));
+  $("#modal").querySelectorAll("[data-dayex]").forEach(b=>b.addEventListener("click",()=>{ syncFields(); openRoutineDayExercises(+b.dataset.dayex); }));
+  $("#rt_save").addEventListener("click",()=>{
+    syncFields();
+    if(!routineDraft.name.trim()){toast("Give your routine a name");return;}
+    if(!routineDraft.days.length){toast("Add at least one day");return;}
+    routineDraft.days.forEach((d,i)=>{ if(!d.label||!d.label.trim()) d.label="Day "+(i+1); });
+    if(!DATA.routines)DATA.routines=[];
+    const ix=DATA.routines.findIndex(x=>x.id===routineDraft.id);
+    const clean={id:routineDraft.id,name:routineDraft.name.trim(),note:(routineDraft.note||"").trim(),days:routineDraft.days};
+    if(ix>=0)DATA.routines[ix]=clean; else DATA.routines.unshift(clean);
+    save(); routineDraft=null; closeModal(); openRoutinesHub(); toast("Routine saved");
+  });
+}
+/* pick exercises for a routine day — reuses the muscle-group pools */
+function openRoutineDayExercises(dayIdx){
+  const day=routineDraft.days[dayIdx]; if(!day)return;
+  if(!day.exercises)day.exercises=[];
+  const allNames=(typeof gymPoolNames==="function")?gymPoolNames():Object.keys(EX_BY_NAME||{});
+  function paint(){
+    const chosen=day.exercises.map(e=>e.name);
+    openModal(`<h3>${esc(day.label||("Day "+(dayIdx+1)))} — exercises</h3>
+      <p class="muted tiny" style="margin-bottom:10px">${chosen.length} selected. Search and tap to add or remove.</p>
+      <input class="input" id="rde_q" placeholder="Search exercises…" style="margin-bottom:10px" autocomplete="off">
+      <div id="rde_sel" class="row wrap" style="gap:6px;margin-bottom:10px">${chosen.map(n=>`<button class="chip sm on" data-rm="${esc(n)}">${esc(n)} ✕</button>`).join("")}</div>
+      <div class="search-list" id="rde_list"></div>
+      <button class="btn str block" id="rde_done" style="margin-top:12px">Done</button>`);
+    function paintList(){
+      const q=$("#rde_q").value.trim().toLowerCase();
+      const pool=(allNames.length?allNames:Object.keys(EX_BY_NAME||{}));
+      const list=(q?pool.filter(n=>n.toLowerCase().includes(q)):pool).slice(0,120);
+      $("#rde_list").innerHTML=list.map(n=>{ const on=day.exercises.some(e=>e.name===n);
+        return `<div class="food-opt"><div style="flex:1;min-width:0"><div class="fn">${esc(n)}</div><div class="fm tiny muted">${esc((EX_BY_NAME[n]||{}).g||"")}</div></div>
+          <button class="btn sm ${on?"":"fuel"}" data-tog="${esc(n)}">${on?"Remove":"＋"}</button></div>`;}).join("")||`<div class="empty">No matches.</div>`;
+      $("#rde_list").querySelectorAll("[data-tog]").forEach(btn=>btn.addEventListener("click",()=>{
+        const n=btn.getAttribute("data-tog"); const i=day.exercises.findIndex(e=>e.name===n);
+        if(i>=0)day.exercises.splice(i,1); else day.exercises.push({name:n,group:(EX_BY_NAME[n]||{}).g||""});
+        paint();
+      }));
+    }
+    $("#rde_q").addEventListener("input",paintList);
+    $("#rde_sel").querySelectorAll("[data-rm]").forEach(b=>b.addEventListener("click",()=>{
+      const n=b.getAttribute("data-rm"); const i=day.exercises.findIndex(e=>e.name===n); if(i>=0)day.exercises.splice(i,1); paint();
+    }));
+    $("#rde_done").addEventListener("click",()=>paintRoutineEditor());
+    paintList();
+  }
+  paint();
+}
+
 /* ===================== GROUP BUILDER ===================== */
 let buildState=null; /* {group, picked:[names], rest} */
 function openGroupBuilder(group){
@@ -1952,13 +2130,17 @@ function openExerciseHistory(name){
   const best=hist.slice().sort((a,b)=>est1RMkg(b.kg,b.reps)-est1RMkg(a.kg,a.reps))[0];
   const last=hist[hist.length-1];
   const pts=hist.map((h,i)=>({x:i,y:Math.round(liftFromKg(est1RMkg(h.kg,h.reps))*10)/10}));
+  const rm=est1RMkg(best.kg,best.reps);
+  const pctRows=[60,70,80,90,95].map(p=>`<div class="rm-row"><span class="rm-p">${p}%</span><span class="rm-w num">${liftStr(rm*p/100)}</span></div>`).join("");
   openModal(`<h3>${esc(name)}</h3>
     <p class="muted tiny" style="margin-bottom:12px">Mid-workout history, pulled from your saved sessions.</p>
     <div class="grid2" style="margin-bottom:12px">
       <div class="stat"><div class="k">Last best set</div><div class="v num">${liftStr(last.kg)}<small> × ${last.reps}</small></div></div>
-      <div class="stat"><div class="k">Best est. 1RM</div><div class="v num">${liftStr(est1RMkg(best.kg,best.reps))}</div></div>
+      <div class="stat"><div class="k">Best est. 1RM</div><div class="v num">${liftStr(rm)}</div></div>
     </div>
     <div class="card">${hist.length>=2?lineChart(pts,"#5AA9FF",{h:150}):`<div class="empty">Best so far: <b style="color:var(--text)">${liftStr(best.kg)} × ${best.reps}</b></div>`}</div>
+    <div class="eyebrow" style="margin:12px 0 8px">Training percentages <span style="text-transform:none;font-weight:500">· of est. 1RM</span></div>
+    <div class="card rm-table">${pctRows}</div>
     <div class="eyebrow" style="margin:12px 0 8px">Recent sets</div>
     <div class="search-list">${hist.slice(-6).reverse().map(h=>`<div class="hist-ex"><div class="hx-n">${shortDate(h.date)} · ${esc(h.title||"Workout")}</div><div class="hx-s">${liftStr(h.kg)} × ${h.reps} · est. 1RM ${liftStr(est1RMkg(h.kg,h.reps))}</div></div>`).join("")}</div>`);
 }
@@ -2700,6 +2882,11 @@ function renderFuel(){
   $("#f_prev").addEventListener("click",()=>{const d=new Date(viewDate);d.setDate(d.getDate()-1);viewDate=todayISO(d);renderFuel();});
   $("#f_next").addEventListener("click",()=>{if(isToday)return;const d=new Date(viewDate);d.setDate(d.getDate()+1);viewDate=todayISO(d);renderFuel();});
 
+  /* ───────── PRIMARY ACTION: log food, above the ring so it needs no scroll ───────── */
+  const afTop=el("button","btn fuel block","＋ Add food"); afTop.style.marginBottom="14px";
+  afTop.addEventListener("click",()=>openFoodSearch());
+  b.appendChild(afTop);
+
   /* ───────── AT A GLANCE: calorie ring + macros ───────── */
   const ringCard=el("div","card center fuel-hero");
   ringCard.innerHTML=`<div class="ring-wrap">${ringSVG(pct, remaining<0?"#FF5470":"#2FE6A8",170)}
@@ -2728,11 +2915,8 @@ function renderFuel(){
   mc.appendChild(mr);
   b.appendChild(mc);
 
-  /* ───────── PRIMARY ACTIONS: log food, front and centre ───────── */
-  const af=el("button","btn fuel block","＋ Add food"); af.style.marginTop="14px";
-  af.addEventListener("click",()=>openFoodSearch());
-  b.appendChild(af);
-  const actRow=el("div","row"); actRow.style.margin="10px 0 0"; actRow.style.gap="10px";
+  /* ───────── secondary actions: burned & repeat ───────── */
+  const actRow=el("div","row"); actRow.style.margin="14px 0 0"; actRow.style.gap="10px";
   const ab=el("button","btn","🔥 Burned"); ab.style.flex="1"; ab.addEventListener("click",openBurned);
   actRow.appendChild(ab);
   const hasPast=Object.keys(DATA.log||{}).some(d=>(DATA.log[d].food||[]).length);
@@ -2854,16 +3038,13 @@ function renderFuel(){
 
 let foodCat="All";
 function allFoods(){
-  const custom=(DATA.customFoods||[]).map(c=>[c.name,c.kcal,c.p,c.c,c.f,"My foods"]);
+  const custom=(DATA.customFoods||[]).map(c=>[c.name,c.kcal,c.p,c.c,c.f,"My foods",c.cat||""]);
   return custom.concat(FOODS);
 }
 function foodPortionFor(name){
   if(!name)return null;
   try{
     if(typeof FOOD_PORTIONS!=="undefined" && FOOD_PORTIONS[name]) return FOOD_PORTIONS[name];
-    if(typeof FOOD_PORTION_RULES!=="undefined"){
-      for(const r of FOOD_PORTION_RULES){ if(r.re && r.re.test(name)) return {unit:r.unit, grams:r.grams}; }
-    }
   }catch(e){}
   return null;
 }
@@ -2965,7 +3146,7 @@ function openFoodSearch(presetMeal){
     const raw=$("#fs_q").value.trim();
     let pool=allFoods();
     if(foodCat==="★ Favourites") pool=pool.filter(f=>isFavFood(f[0]));
-    else if(foodCat!=="All"&&foodCat!=="★ Favourites") pool=pool.filter(f=>f[5]===foodCat);
+    else if(foodCat!=="All"&&foodCat!=="★ Favourites") pool=pool.filter(f=>f[5]===foodCat || (f[6]&&f[6]===foodCat));
     const list=raw
       ? pool.map(f=>({f,score:foodSearchScore(f[0],raw)})).filter(x=>x.score<999)
           .sort((a,b)=>a.score-b.score || a.f[0].localeCompare(b.f[0])).slice(0,150).map(x=>x.f)
@@ -3050,11 +3231,18 @@ function openCustomFood(presetMeal){
       <div class="field"><label>Carbs (g /100g)</label><input class="input num" id="cf_c" type="number" inputmode="decimal" placeholder="45"></div>
       <div class="field"><label>Fat (g /100g)</label><input class="input num" id="cf_f" type="number" inputmode="decimal" placeholder="16"></div>
     </div>
-    <button class="btn fuel block" id="cf_save">Save & use food</button>`);
+    <div class="field"><label>Category (optional)</label>
+      <div class="row wrap" id="cf_cat" style="gap:6px">${["My foods only",...Array.from(new Set(FOODS.map(f=>f[5])))].map((c,i)=>`<button type="button" class="chip sm ${i===0?"on":""}" data-cat="${i===0?"":esc(c)}">${esc(c)}</button>`).join("")}</div></div>
+    <button class="btn fuel block" id="cf_save">Save &amp; use food</button>`);
+  $("#cf_cat").querySelectorAll("[data-cat]").forEach(btn=>btn.addEventListener("click",()=>{
+    $("#cf_cat").querySelectorAll("[data-cat]").forEach(x=>x.classList.remove("on")); btn.classList.add("on");
+  }));
   $("#cf_save").addEventListener("click",()=>{
     const n=$("#cf_n").value.trim(); if(!n){toast("Give it a name");return;}
     let k=+$("#cf_k").value; if(DATA.prefs.energy==="kj")k=k/4.184;
     const food={name:n,kcal:Math.max(0,k||0),p:+$("#cf_p").value||0,c:+$("#cf_c").value||0,f:+$("#cf_f").value||0};
+    const catBtn=$("#cf_cat")?$("#cf_cat").querySelector(".on"):null;
+    food.cat=catBtn&&catBtn.dataset.cat?catBtn.dataset.cat:"";
     if(!DATA.customFoods)DATA.customFoods=[];
     const ex=DATA.customFoods.findIndex(x=>x.name.toLowerCase()===n.toLowerCase());
     if(ex>=0)DATA.customFoods[ex]=food; else DATA.customFoods.unshift(food);
@@ -3541,6 +3729,33 @@ function renderStats(){
     }else{ wc.innerHTML=`<div class="empty">Tap ＋ Log weight to record your weight.</div>`; }
     body.appendChild(wc);
   }
+  function buildProgressPhotos(body){
+    const host=el("div");
+    function paint(){
+      host.innerHTML="";
+      const intro=el("p","tiny muted","Private to this device — progress photos are never uploaded, synced, or included in any backup. They stay only on this phone.");
+      intro.style.cssText="margin:0 0 12px;line-height:1.5"; host.appendChild(intro);
+      const add=el("button","btn sm","📸 Add progress photo"); add.style.marginBottom="12px";
+      const fileIn=el("input"); fileIn.type="file"; fileIn.accept="image/*"; fileIn.style.display="none";
+      add.addEventListener("click",()=>fileIn.click());
+      fileIn.addEventListener("change",e=>{ const f=e.target.files&&e.target.files[0]; if(f) addProgressPhotoFromFile(f,()=>{ paint(); if(made&&made.pg_photos&&made.pg_photos._setSub) made.pg_photos._setSub(getProgressPhotos().length+" saved · private to this device"); }); });
+      host.append(add,fileIn);
+      const photos=getProgressPhotos();
+      if(!photos.length){ host.appendChild(el("div","empty","No photos yet — add one to start a private visual timeline.")); body.appendChild(host); return; }
+      const grid=el("div","photo-grid");
+      photos.forEach(p=>{
+        const cell=el("div","photo-cell");
+        cell.innerHTML=`<img src="${p.img}" alt="Progress ${shortDate(p.date)}"><div class="photo-date">${shortDate(p.date)}</div><button class="photo-del" data-del="${p.id}" title="Delete">✕</button>`;
+        grid.appendChild(cell);
+      });
+      host.appendChild(grid);
+      grid.querySelectorAll("[data-del]").forEach(btn=>btn.addEventListener("click",()=>{
+        confirmModal({title:"Delete this photo?",danger:true,confirmText:"Delete",body:"This removes the photo from this device. It can't be undone.",onConfirm:()=>{ deleteProgressPhoto(+btn.dataset.del,paint); toast("Photo deleted"); }});
+      }));
+      body.appendChild(host);
+    }
+    paint();
+  }
   function buildVolume(body){
     const vc=el("div","card");
     const vw=DATA.workouts.filter(w=>w.volume>0);
@@ -3677,6 +3892,7 @@ function renderStats(){
   mk("pg_calendar","🗓️","Calendar","Your training days, month by month",(body)=>renderCalendar(body,true));
   if(DATA.targets) mk("pg_streaks","🔥","Streaks","Day runs for workouts, protein & water",(body)=>renderStreaks(body,true));
   mk("pg_weight","⚖️","Bodyweight","Your weight trend over time",buildWeight);
+  mk("pg_photos","📸","Progress photos",`${getProgressPhotos().length} saved · private to this device`,buildProgressPhotos);
   mk("pg_volume","📊","Lifting volume","Total weight lifted each session",buildVolume);
   mk("pg_strength","💪","Strength per exercise","Best sets & estimated 1-rep-max per lift",buildStrength);
   if(DATA.targets) mk("pg_targets","🍎","Daily targets","Your calorie & macro goals",buildTargets);
@@ -3687,7 +3903,7 @@ function renderStats(){
 
   /* the 3 groups, in order of how often people check them */
   const groups=[
-    ["📈 Trends",            ["pg_weight","pg_volume","pg_strength","pg_goal"]],
+    ["📈 Trends",            ["pg_weight","pg_photos","pg_volume","pg_strength","pg_goal"]],
     ["📅 Activity",          ["pg_calendar","pg_workouts","pg_cardio","pg_mega"]],
     ["🎯 Goals & milestones",["pg_streaks","pg_targets","pg_badges"]]
   ];
@@ -3822,17 +4038,24 @@ function backupReminder(){
   $("#wf_backup").addEventListener("click",()=>{closeModal();setTimeout(()=>{try{openExport();}catch(e){switchTab("more");}},180);});
   $("#wf_later").addEventListener("click",closeModal);
 }
-const LAST_UPDATED="12 June 2026";
-const LATEST_NUM="3.30-test";
-const LATEST_TITLE="Test package: rebuilt food logger";
+const LAST_UPDATED="14 June 2026";
+const LATEST_NUM="3.31";
+const LATEST_TITLE="Routines, progress photos, CSV export & logger polish";
 const LATEST_ITEMS=[
-  "<b>New plate-based logger</b> — add several foods to a running plate, adjust each portion, then log the whole meal at once. No more re-opening search between every item.",
-  "<b>Results show first</b> — when you search, matches appear straight away; the food categories are tucked behind a <b>▾ Categories</b> toggle so they no longer push results down the screen.",
-  "<b>Recent &amp; frequent up top</b> — your usual foods are one tap away (with a ＋) before you type anything.",
-  "<b>Tap to adjust</b> — on the plate, tap a food's name or its ⚙ to change the portion inline; ✕ removes it.",
-  "<b>Backup reminders fixed</b> — the Off/Daily/Weekly/Biweekly/Monthly row now scrolls sideways instead of overflowing the edge.",
-  "Everything from 3.29 (encrypted backups, reminders, profile photos) is unchanged underneath."
+  "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap.",
+  "<b>Progress photos</b> — a private photo timeline in Progress → Trends, stored only on this device and never uploaded or backed up.",
+  "<b>CSV export</b> — save your workouts or food log as a spreadsheet (Settings → Backup) for your own records.",
+  "<b>1RM training percentages</b> — the strength sheet now shows 60–95% of your estimated 1RM for percentage-based programming.",
+  "<b>Faster food logging</b> — ＋ Add food now sits at the top of Fuel, with a floating ＋ that follows you as you scroll.",
+  "<b>Smarter portions</b> — common foods show a sensible portion (1 egg, 1 slice) while everything else uses grams; you can always type grams.",
+  "<b>Your own foods, categorised</b> — tag a custom food with a category so it shows up there as well as under My foods.",
+  "<b>Cleaner welcome screen</b> — the app icon now sits without a frame."
 ];
+const HISTORY_330={num:"3.30-test",title:"Rebuilt food logger",items:[
+  "<b>Plate-based logger</b> — add several foods to a running plate, then log the whole meal at once.",
+  "<b>Results show first</b> — categories tucked behind a ▾ toggle so they don't bury your search results.",
+  "<b>Recent &amp; frequent up top</b>, and inline portion editing on the plate."
+]};
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px">
@@ -3843,6 +4066,7 @@ function openChangelog(){
     <div class="tiny muted" style="margin:-4px 0 10px">Last updated ${LAST_UPDATED}</div>
     <div style="max-height:62vh;overflow:auto;margin-top:4px">
     ${v(LATEST_NUM,LATEST_TITLE,LATEST_ITEMS)}
+    ${v(HISTORY_330.num,HISTORY_330.title,HISTORY_330.items)}
     ${v("3.29-test","Simple encrypted cloud save",[
       "<b>Simpler cloud-safe backups</b> — Evolve creates an encrypted backup file locally, then opens your phone's Save/Share sheet so you choose iCloud, Files, Drive or anywhere.",
       "<b>No Google setup needed</b> — the OAuth / Client ID flow was removed from the main app.",
@@ -4262,6 +4486,13 @@ function renderMore(){
     rem.append(notif,test); body.appendChild(rem);
     rem.querySelectorAll("#bk_freq button").forEach(btn=>btn.addEventListener("click",()=>{DATA.meta.backupReminder=btn.dataset.v;save();renderMore();toast("Backup reminder: "+backupReminderLabel(btn.dataset.v));}));
 
+    const csv=el("div","card"); csv.style.marginTop="12px";
+    csv.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">📄 Export as CSV</div>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Save your workouts or food log as a spreadsheet (CSV) you can open in Excel, Numbers or Google Sheets. This is for your own records — it isn't an encrypted backup, so it won't restore the app.</p>`;
+    const csvW=el("button","btn block","Export workouts (CSV)"); csvW.addEventListener("click",()=>exportWorkoutsCSV());
+    const csvF=el("button","btn block","Export food log (CSV)"); csvF.style.marginTop="10px"; csvF.addEventListener("click",()=>exportFoodCSV());
+    csv.append(csvW,csvF); body.appendChild(csv);
+
     const tipsB=el("button","btn block","📲 Install & backup tips"); tipsB.style.marginTop="12px"; tipsB.addEventListener("click",openWelcomeFlow); body.appendChild(tipsB);
   }
 
@@ -4327,7 +4558,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.30-test`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.31`));
   b.lastChild.style.padding="18px 0 4px";
 }
 
@@ -4373,6 +4604,37 @@ async function saveOrShareBlob(blob,name,title="Evolve backup",text="Evolve back
   }catch(e){}
   try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast("Backup file saved");}
   catch(e){toast("Couldn't save file here");}
+}
+/* v3.31 — CSV exports (records only; not an encrypted/restorable backup) */
+function _csvCell(v){ const s=String(v==null?"":v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function _csvRows(rows){ return rows.map(r=>r.map(_csvCell).join(",")).join("\r\n")+"\r\n"; }
+function exportWorkoutsCSV(){
+  const rows=[["Date","Workout","Type","Exercise","Set","Weight ("+liftUnit()+")","Reps","Warm-up","Volume ("+liftUnit()+")"]];
+  const ws=(DATA.workouts||[]).slice().sort((a,b)=>a.date<b.date?-1:1);
+  if(!ws.length){ toast("No workouts to export yet"); return; }
+  ws.forEach(w=>{
+    (w.exercises||[]).forEach(ex=>{
+      const sets=(ex.sets||[]);
+      if(!sets.length){ rows.push([w.date,w.title||"",w.type||"",ex.name,"","","","",""]); return; }
+      sets.forEach((s,i)=>{
+        const wt=liftFromKg(+s.kg||0);
+        rows.push([w.date,w.title||"",w.type||"",ex.name,i+1,Math.round(wt*100)/100,+s.reps||0,s.warmup?"yes":"",Math.round(wt*(+s.reps||0)*100)/100]);
+      });
+    });
+    if(!(w.exercises||[]).length) rows.push([w.date,w.title||"",w.type||"","(no exercises logged)","","","","",""]);
+  });
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-workouts-"+todayISO()+".csv","Evolve workouts","Evolve workout history (CSV)");
+}
+function exportFoodCSV(){
+  const rows=[["Date","Meal","Food","Grams",eUnit(),"Protein (g)","Carbs (g)","Fat (g)"]];
+  const days=Object.keys(DATA.log||{}).filter(d=>(DATA.log[d].food||[]).length).sort();
+  if(!days.length){ toast("No food logged to export yet"); return; }
+  days.forEach(d=>{
+    (DATA.log[d].food||[]).forEach(f=>{
+      rows.push([d,(mealById(mealOf(f))||{}).name||"",f.name,Math.round(f.grams||0),eVal(f.kcal||0),Math.round((f.p||0)*10)/10,Math.round((f.c||0)*10)/10,Math.round((f.f||0)*10)/10]);
+    });
+  });
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-food-"+todayISO()+".csv","Evolve food log","Evolve food log (CSV)");
 }
 function openEncryptedExport(){
   if(!backupCryptoReady()){toast("Encryption is not available in this browser");return;}

@@ -48,7 +48,7 @@ a{color:var(--fuel)}
 .splash-news-body{display:none;width:100%;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px;margin:-4px 0 8px;text-align:left;font-size:12.5px;line-height:1.6;color:var(--muted);max-height:40vh;overflow:auto}
 .splash-news-body.open{display:block}
 .splash-news-body b{color:var(--text)}
-.splash-logo-img{width:min(40vw,168px);height:auto;display:block;margin:0 auto 14px;border-radius:28px;box-shadow:0 18px 44px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.08)}
+.splash-logo-img{width:min(40vw,168px);height:auto;display:block;margin:0 auto 14px}
 .splash-mark{font-size:clamp(52px,16vw,94px);letter-spacing:.04em;line-height:1;max-width:100%;
   background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;color:transparent}
 .splash-tag{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:.22em;color:var(--muted);margin-top:6px}
@@ -668,3 +668,37 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 
 .profile-photo-btn{border:0;cursor:pointer;flex:0 0 auto}
 .profile-photo-btn:active{transform:scale(.97)}
+
+/* v3.31 — floating "+" Add-food button (Fuel tab only) */
+#fuelFab{position:fixed;z-index:119;right:max(22px,calc((100vw - 560px)/2 + 22px));
+  bottom:calc(90px + var(--safe-b));width:56px;height:56px;border-radius:50%;
+  background:var(--grad-fuel,linear-gradient(135deg,#2FE6A8,#16b98a));color:#04241a;
+  font-size:30px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;
+  border:none;box-shadow:0 10px 26px rgba(0,0,0,.5),0 0 0 4px var(--ink);
+  transition:transform .14s ease, opacity .2s ease}
+#fuelFab:active{transform:scale(.92)}
+#fuelFab.hidden{display:none}
+
+/* v3.31 — 1RM training percentage table */
+.rm-table{padding:4px 0}
+.rm-row{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-top:1px solid var(--line)}
+.rm-row:first-child{border-top:none}
+.rm-p{color:var(--muted);font-weight:600;font-size:13px}
+.rm-w{font-weight:700;font-size:15px}
+
+/* v3.31 — progress photo gallery (local only) */
+.photo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.photo-cell{position:relative;border-radius:14px;overflow:hidden;background:var(--ink2);border:1px solid var(--line2)}
+.photo-cell img{width:100%;height:170px;object-fit:cover;display:block}
+.photo-date{position:absolute;left:0;right:0;bottom:0;padding:6px 8px;font-size:11px;font-weight:600;color:#fff;background:linear-gradient(to top,rgba(0,0,0,.7),transparent)}
+.photo-del{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+
+/* v3.31 — routines (multi-day programs) */
+.rt-card{display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--surface);border:1px solid var(--line2);border-radius:14px;margin-bottom:10px;cursor:pointer}
+.rt-main{flex:1;min-width:0}
+.rt-name{font-weight:700;font-size:15px}
+.rt-sub{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-day{background:var(--surface);border:1px solid var(--line2);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+.rt-day-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+.rt-day-name{font-weight:700;font-size:15px}
+.rt-edit-day{background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:10px}

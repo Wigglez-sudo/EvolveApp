@@ -1042,54 +1042,71 @@ const FOODS = [
    Values are approximate grams for one everyday serving; macros still
    calculate from the per-100g database above, so users can override grams. */
 const FOOD_PORTIONS = {
+  /* v3.31 — EXACT-NAME portions only. A food shows a named portion ONLY if its
+     name is an exact key here. Everything else falls through to grams-only chips.
+     Grams entry is always available regardless. No substring/regex matching —
+     that previously mis-tagged "apple sauce" as "1 medium", "veggie burger" as
+     "1 egg", etc. */
+
+  /* eggs (the egg itself — not dishes) */
   "Egg (whole)": {unit:"1 egg", grams:50},
   "Boiled egg": {unit:"1 egg", grams:50},
   "Fried egg": {unit:"1 egg", grams:46},
-  "Egg white": {unit:"1 white", grams:33},
-  "Egg yolk": {unit:"1 yolk", grams:17},
+  "Scrambled egg": {unit:"1 egg", grams:61},
+  "Duck egg": {unit:"1 egg", grams:70},
+  "Quail egg": {unit:"1 egg", grams:9},
+
+  /* whole fruit */
   "Banana": {unit:"1 medium", grams:118},
   "Apple": {unit:"1 medium", grams:182},
   "Orange": {unit:"1 medium", grams:131},
   "Pear": {unit:"1 medium", grams:178},
   "Kiwi": {unit:"1 fruit", grams:75},
-  "Avocado": {unit:"1/2 avocado", grams:75},
-  "Bread (white)": {unit:"1 slice", grams:36},
-  "Bread (wholemeal)": {unit:"1 slice", grams:38},
-  "Tortilla wrap": {unit:"1 wrap", grams:60},
-  "Bagel": {unit:"1 bagel", grams:95},
+  "Avocado": {unit:"1/2 avocado", grams:100},
+
+  /* real bread & bakery (genuine slices/units) */
+  "White bread": {unit:"1 slice", grams:36},
+  "Wholemeal bread": {unit:"1 slice", grams:38},
+  "Brown bread": {unit:"1 slice", grams:38},
+  "Rye bread": {unit:"1 slice", grams:32},
+  "Multigrain bread": {unit:"1 slice", grams:38},
+  "Pitta bread": {unit:"1 pitta", grams:60},
+  "Naan bread": {unit:"1 naan", grams:160},
+  "Tortilla wrap": {unit:"1 wrap", grams:64},
+  "Wholemeal wrap": {unit:"1 wrap", grams:64},
+  "Bagel (plain)": {unit:"1 bagel", grams:85},
+  "Bagel (cinnamon raisin)": {unit:"1 bagel", grams:85},
   "Crumpet": {unit:"1 crumpet", grams:55},
-  "Weetabix": {unit:"1 biscuit", grams:19},
-  "Protein bar": {unit:"1 bar", grams:60},
+
+  /* protein */
   "Chicken breast (grilled)": {unit:"1 breast", grams:150},
   "Chicken breast (raw)": {unit:"1 breast", grams:170},
   "Salmon (cooked)": {unit:"1 fillet", grams:130},
-  "Tuna (canned in water)": {unit:"1 tin", grams:145},
-  "Tuna (canned in oil)": {unit:"1 tin", grams:145},
-  "Pizza (cheese)": {unit:"1 slice", grams:100},
-  "Pizza (pepperoni)": {unit:"1 slice", grams:105}
+  "Salmon (smoked)": {unit:"1 fillet", grams:100},
+  "Salmon (raw)": {unit:"1 fillet", grams:130},
+  "Sausage (pork, cooked)": {unit:"1 sausage", grams:65},
+  "Chicken sausage": {unit:"1 sausage", grams:60},
+
+  /* pizza (per slice) */
+  "Pizza (cheese)": {unit:"1 slice", grams:107},
+  "Pizza (pepperoni)": {unit:"1 slice", grams:111},
+  "Pizza (margherita)": {unit:"1 slice", grams:107},
+  "Pizza (meat feast)": {unit:"1 slice", grams:120},
+
+  /* burgers (per burger) */
+  "Cheeseburger": {unit:"1 burger", grams:113},
+  "Hamburger": {unit:"1 burger", grams:110},
+  "Double cheeseburger": {unit:"1 burger", grams:165},
+  "Chicken burger": {unit:"1 burger", grams:150},
+  "Bacon cheeseburger": {unit:"1 burger", grams:170},
+
+  /* biscuits (per biscuit) */
+  "Digestive biscuit": {unit:"1 biscuit", grams:15},
+  "Rich tea biscuit": {unit:"1 biscuit", grams:10},
+  "Chocolate biscuit": {unit:"1 biscuit", grams:17},
+  "Wafer biscuit": {unit:"1 biscuit", grams:12},
+  "Breakfast biscuit": {unit:"1 biscuit", grams:25}
 };
-const FOOD_PORTION_RULES = [
-  {re:/egg/i, unit:"1 egg", grams:50},
-  {re:/banana/i, unit:"1 medium", grams:118},
-  {re:/apple/i, unit:"1 medium", grams:182},
-  {re:/orange/i, unit:"1 medium", grams:131},
-  {re:/pear/i, unit:"1 medium", grams:178},
-  {re:/kiwi/i, unit:"1 fruit", grams:75},
-  {re:/avocado/i, unit:"1/2 avocado", grams:75},
-  {re:/bread|toast/i, unit:"1 slice", grams:38},
-  {re:/wrap|tortilla/i, unit:"1 wrap", grams:60},
-  {re:/bagel/i, unit:"1 bagel", grams:95},
-  {re:/crumpet/i, unit:"1 crumpet", grams:55},
-  {re:/bar\b/i, unit:"1 bar", grams:60},
-  {re:/chicken breast/i, unit:"1 breast", grams:150},
-  {re:/salmon.*fillet|salmon/i, unit:"1 fillet", grams:130},
-  {re:/tuna.*canned|tuna.*tin/i, unit:"1 tin", grams:145},
-  {re:/pizza/i, unit:"1 slice", grams:100},
-  {re:/biscuit/i, unit:"1 biscuit", grams:15},
-  {re:/slice/i, unit:"1 slice", grams:30},
-  {re:/sausage/i, unit:"1 sausage", grams:65},
-  {re:/burger/i, unit:"1 burger", grams:120}
-];
 
 
 const ACT = {sed:{m:1.2,l:"Sedentary (little/no exercise)"},light:{m:1.375,l:"Light (1–3 days/week)"},

@@ -2,7 +2,7 @@
 
 **Train smarter · Become next.**
 
-> Current test package: **v3.29-test** — simplifies cloud backup into encrypted Save/Share files, removes the Google OAuth setup from the main flow, and keeps backup reminders plus the test-notification button.
+> Current release: **v3.31** (final) — adds multi-day **routines**, private **progress photos**, **CSV export**, and a **1RM training-percentage** table; reworks food logging (＋ Add food at the top plus a floating ＋, smarter exact-name portions, categorised custom foods); and removes the splash logo frame.
 
 Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
 
@@ -71,7 +71,7 @@ Evolve is deliberately simple under the hood:
 | `manifest.json` | App name, icons, and install settings (icons are embedded) |
 | `sw.js` | Service worker — offline caching |
 | `EVOLVE_HANDOFF.txt` | Developer notes / project history |
-| `Evolve-v3.29-test-preview.html` | Single-file preview build for testing |
+| `Evolve-v3.31-preview.html` | Single-file preview build for testing |
 | `evolve_code.txt` | Combined source snapshot/reference dump |
 | `LICENSE` | MIT license (free to reuse with credit) |
 | `README.md` | This file |
@@ -93,7 +93,9 @@ After the first online visit it works completely offline. This ZIP is a test pac
 
 New versions are published by replacing the files in this repo. Your saved data is **never** affected by an update — workouts, food, weight, and settings all carry over. To pull a new version, fully close the app and reopen it once or twice.
 
-**Latest test package — v3.29-test (12 Jun 2026):** Simplifies cloud backup. The awkward Google Drive OAuth / Client ID flow has been removed from the main app. Evolve now creates a password-encrypted backup file locally, then opens the phone’s normal Save/Share sheet so the user can choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA, email, USB, or any other storage target. Backup reminders, notification permission, Send test notification, encrypted restore, manual backup codes, local profile photos and all v3.28 safeguards remain.
+**Latest release — v3.31 (14 Jun 2026, final):** Adds four features drawn from a review of the leading workout trackers. **Routines** — build a multi-day program (e.g. Push/Pull/Legs) under Train → 📋 Programs and start any day with one tap. **Progress photos** — a private visual timeline in Progress → Trends, stored only on the device and never uploaded or backed up. **CSV export** — save workouts or the food log as a spreadsheet from Settings → Backup. **1RM training percentages** — the strength sheet shows 60–95% of your estimated 1RM. Food logging also improves: ＋ Add food sits at the top of Fuel with a floating ＋ that follows you as you scroll; portions now use an exact-name list (common foods show 1 egg / 1 slice, everything else uses grams, and grams entry is always available); custom foods can be tagged with a category. The splash logo no longer has a frame.
+
+**v3.29-test (12 Jun 2026):** Simplifies cloud backup. The awkward Google Drive OAuth / Client ID flow has been removed from the main app. Evolve now creates a password-encrypted backup file locally, then opens the phone’s normal Save/Share sheet so the user can choose iCloud, Files, Google Drive, Proton Drive, Dropbox, OneDrive, MEGA, email, USB, or any other storage target. Backup reminders, notification permission, Send test notification, encrypted restore, manual backup codes, local profile photos and all v3.28 safeguards remain.
 
 **v3.28-test (12 Jun 2026):** Added optional encrypted Google Drive backup, password-encrypted local backup files, restore from encrypted files/Drive, backup reminder frequency (Off/Daily/Weekly/Biweekly/Monthly), and a test notification button so you can see how reminders look. Google Drive backup was off by default, warned twice before enabling, and required the user to provide a Google OAuth Client ID before upload could work. This was replaced in v3.29-test by the simpler encrypted Save/Share flow.
 
