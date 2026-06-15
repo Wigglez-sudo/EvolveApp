@@ -38,7 +38,7 @@ a{color:var(--fuel)}
 /* ---------- SPLASH (v3 redesign) ---------- */
 #splash{position:fixed;inset:0;z-index:200;background:var(--ink);
   display:flex;flex-direction:column;align-items:center;overflow-y:auto;overflow-x:hidden;
-  padding:40px 26px calc(40px + var(--safe-b));text-align:center;
+  padding:calc(36px + var(--safe-t)) 26px calc(34px + var(--safe-b));text-align:center;
   transition:opacity .5s ease, visibility .5s}
 #splash.gone{opacity:0;visibility:hidden;pointer-events:none}
 .splash-orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.42;pointer-events:none;
@@ -53,11 +53,14 @@ a{color:var(--fuel)}
 .splash-news-body{display:none;width:100%;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;padding:14px;margin:-4px 0 8px;text-align:left;font-size:12.5px;line-height:1.6;color:var(--muted);max-height:40vh;overflow:auto}
 .splash-news-body.open{display:block}
 .splash-news-body b{color:var(--text)}
-.splash-logo-img{width:min(40vw,168px);height:auto;display:block;margin:0 auto 14px}
-.splash-mark{font-size:clamp(52px,16vw,94px);letter-spacing:.04em;line-height:1;max-width:100%;
+.splash-logo-img{width:min(34vw,140px);height:auto;display:block;margin:0 auto 18px;
+  border-radius:28px;box-shadow:0 18px 50px rgba(255,106,44,.28),0 8px 24px rgba(0,0,0,.5);
+  animation:logoIn .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes logoIn{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
+.splash-mark{font-size:clamp(48px,15vw,86px);letter-spacing:.04em;line-height:1;max-width:100%;
   background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;color:transparent}
-.splash-tag{font-family:var(--font-disp),sans-serif;font-size:18px;letter-spacing:.22em;color:var(--muted);margin-top:6px}
-.splash-feats{display:flex;flex-direction:column;gap:10px;width:100%;margin:30px 0 34px}
+.splash-tag{font-family:var(--font-disp),sans-serif;font-size:16px;letter-spacing:.2em;color:var(--muted);margin-top:8px}
+.splash-feats{display:flex;flex-direction:column;gap:10px;width:100%;margin:34px 0 30px}
 .sf{display:flex;align-items:center;gap:13px;text-align:left;font-size:14px;font-weight:600;color:var(--text);
   background:rgba(255,255,255,.045);border:1px solid var(--line2);border-radius:15px;padding:13px 16px;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
@@ -769,3 +772,21 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 .saved-empty-t{font-weight:800;font-size:15px;margin-bottom:6px}
 .saved-empty-s{color:var(--muted);font-size:13px;line-height:1.5}
 .fav-src{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;color:var(--strength);vertical-align:middle}
+
+/* v1.0 — coach generate-workout options sheet */
+.cg-label{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--muted);margin:0 0 9px}
+.cg-groups{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.cg-chip{padding:10px 16px;border-radius:999px;border:1px solid var(--line2);background:var(--surface2);
+  color:var(--text);font-weight:600;font-size:14px;cursor:pointer;transition:background .15s,border-color .15s}
+.cg-chip.on{background:var(--strength-soft,rgba(255,106,44,.16));border-color:var(--strength);color:#fff}
+.cg-size{display:flex;gap:8px}
+.cg-seg{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 6px;border-radius:14px;
+  border:1px solid var(--line2);background:var(--surface2);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.cg-seg small{font-size:11px;font-weight:600;color:var(--muted)}
+.cg-seg.on{background:var(--strength);color:#1a0e06;border-color:var(--strength)}
+.cg-seg.on small{color:#5a2c10}
+
+/* v1.0 — coach generate retry message */
+.cw-retry{width:100%}
+.cw-retry-t{font-weight:700;font-size:14px;margin-bottom:6px}
+.cw-retry-s{color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:12px}

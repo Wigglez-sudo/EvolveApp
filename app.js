@@ -942,7 +942,7 @@ const TAB_HELP={
     <div class="help-row"><b>⚠️ Sends data off device</b><span>This is the only part of Evolve that isn't fully on-device. When you ask something, your question + a summary of your training is sent to OpenRouter to generate a reply. You consent before it's enabled.</span></div>
     <div class="help-row"><b>Your key</b><span>Create a free key at openrouter.ai/keys and paste it in. It's stored only on this device, never in any backup, and never sent anywhere except OpenRouter.</span></div>
     <div class="help-row"><b>Chat</b><span>Ask anything about your training or nutrition; the coach sees your recent workouts and goals.</span></div>
-    <div class="help-row"><b>Generate a workout</b><span>Builds a session from your goal, equipment and recent training.</span></div>
+    <div class="help-row"><b>Generate a workout</b><span>Choose the muscle groups and length you want — or tap “Recommend one for me” and the Coach picks based on your goal and recent training. Then Start it now or Save for later.</span></div>
     <div class="help-row"><b>Analyse my logs</b><span>Reviews your recent workouts &amp; targets and suggests improvements.</span></div>
     <div class="help-row"><b>Models</b><span>Pick from free or paid models in Coach settings. Free ones cost nothing; paid ones use your OpenRouter credit.</span></div>
     <div class="help-row"><b>Not medical advice</b><span>The coach can be wrong — see a professional for pain, injury or medical concerns.</span></div></div>`}
@@ -2021,6 +2021,14 @@ function renderCoach(){
     log.innerHTML=`<div class="coach-empty muted">Ask anything about your training or nutrition — e.g. "how do I bring up my shoulders?" or "is my protein high enough?"</div>`;
   } else {
     log.innerHTML=coachChat.map((m,idx)=>{
+      if(m.role==="assistant" && typeof m.content==="string" && m.content.indexOf("__GENRETRY__")===0){
+        let o={}; try{ o=JSON.parse(m.content.slice(12)); }catch(e){}
+        return `<div class="coach-msg assistant"><div class="coach-bubble cw-retry">
+          <div class="cw-retry-t">Hmm, the model didn't return a usable workout.</div>
+          <div class="cw-retry-s">This happens sometimes with free models — they can reply with extra text or get busy. It's not an app issue. Just try again, or switch model in Coach settings.</div>
+          <button class="btn str sm" data-gen-retry='${esc(JSON.stringify(o))}'>↻ Try again</button>
+        </div></div></div>`;
+      }
       if(m.role==="assistant" && typeof m.content==="string" && m.content.indexOf("__WORKOUT__")===0){
         let wk=null; try{ wk=JSON.parse(m.content.slice(11)); }catch(e){}
         if(wk && wk.exercises){
@@ -2039,6 +2047,12 @@ function renderCoach(){
   }
   b.appendChild(log);
   /* wire any generated-workout cards */
+  log.querySelectorAll("[data-gen-retry]").forEach(btn=>btn.addEventListener("click",()=>{
+    let o={}; try{ o=JSON.parse(btn.dataset.genRetry); }catch(e){}
+    /* drop the failed message before retrying so the log stays tidy */
+    if(coachChat.length && typeof coachChat[coachChat.length-1].content==="string" && coachChat[coachChat.length-1].content.indexOf("__GENRETRY__")===0){ coachChat.pop(); }
+    coachGenerateWorkout(o);
+  }));
   log.querySelectorAll("[data-cw-start]").forEach(btn=>btn.addEventListener("click",()=>{
     const m=coachChat[+btn.dataset.cwStart]; if(!m)return; let wk=null; try{wk=JSON.parse(m.content.slice(11));}catch(e){}
     if(wk) coachStartWorkout(wk);
@@ -2080,7 +2094,7 @@ async function coachSend(q){
   coachBusy(false); renderCoach();
 }
 async function coachAction(kind){
-  if(kind==="generate"){ return coachGenerateWorkout(); }
+  if(kind==="generate"){ return openCoachGenSheet(); }
   const prompt = "Analyse my recent workouts and nutrition context. Point out 2-3 specific things going well and 2-3 things to improve, with concrete next steps.";
   coachSend(prompt);
 }
@@ -2105,19 +2119,32 @@ function coachMatchExercise(name){
   pool.forEach(n=>{ const nw=norm(n).split(" "); const ov=tw.filter(t=>nw.includes(t)).length; if(ov>bestScore){bestScore=ov;best=n;} });
   return bestScore>=2?best:null; /* need a decent overlap to avoid nonsense matches */
 }
-async function coachGenerateWorkout(){
+async function coachGenerateWorkout(opts){
+  opts=opts||{};
   const pool=coachExercisePool();
   /* cap the list we send so the prompt isn't huge, but include a good spread */
   const allowed=pool.slice(0,180);
-  const sys=`You are a strength coach. Generate ONE workout session for the user from their data.
+  /* translate the user's choices into prompt instructions */
+  const groups=(opts.groups&&opts.groups.length)?opts.groups:null;
+  const sizeMap={quick:"3 to 4 exercises (a short, quick session)",standard:"5 to 6 exercises (a standard session)",full:"7 to 8 exercises (a long, full session)"};
+  const sizeText=sizeMap[opts.size]||"4 to 7 exercises";
+  let focusText;
+  if(groups){
+    focusText=`Focus the workout on these muscle groups ONLY: ${groups.join(", ")}. Pick exercises that train those groups.`;
+  } else {
+    focusText="Pick the most useful muscle groups for the user based on their goal and recent training (a sensible recommended session).";
+  }
+  const sys=`You are a strength coach. Generate ONE workout session for the user.
 Respond with ONLY valid JSON (no markdown, no prose, no code fences) in EXACTLY this shape:
 {"title":"string","exercises":[{"name":"string","sets":number,"reps":"string"}]}
 Rules:
 - Choose "name" values ONLY from this allowed list (copy the exact spelling): ${JSON.stringify(allowed)}
-- 4 to 7 exercises. "reps" can be a range like "8-12". "sets" is a whole number.
-- Pick exercises suitable for the user's goal, equipment and recent training.
+- ${focusText}
+- Include ${sizeText}. "reps" can be a range like "8-12". "sets" is a whole number.
+- Make the "title" reflect the focus (e.g. the muscle groups or session type).
 - Output the JSON object and nothing else.`;
-  coachChat.push({role:"user",content:"🏋️ Generate a workout"});
+  const label = groups ? `🏋️ Generate: ${groups.join(", ")}` : "🏋️ Generate a recommended workout";
+  coachChat.push({role:"user",content:label});
   coachChat.push({role:"assistant",content:"…building your workout"});
   renderCoach(); coachBusy(true);
   try{
@@ -2126,7 +2153,7 @@ Rules:
     const reply=await coachAsk(msgs);
     const wk=parseCoachWorkout(reply);
     if(!wk || !wk.exercises.length){
-      coachChat[coachChat.length-1]={role:"assistant",content:"I couldn't read a workout from that response. Try again, or switch model in Coach settings."};
+      coachChat[coachChat.length-1]={role:"assistant",content:"__GENRETRY__"+JSON.stringify(opts||{})};
     } else {
       coachChat[coachChat.length-1]={role:"assistant",content:"__WORKOUT__"+JSON.stringify(wk)};
     }
@@ -2135,14 +2162,60 @@ Rules:
   }
   coachBusy(false); renderCoach();
 }
+/* options sheet shown when the user taps "Generate a workout" */
+function openCoachGenSheet(){
+  const picked=new Set();
+  openModal(`<h3>Build a workout</h3>
+    <p class="muted tiny" style="line-height:1.5;margin-bottom:16px">Let the Coach pick a recommended session, or choose the muscle groups and length yourself.</p>
+    <button class="btn str block" id="cg_rec" style="margin-bottom:18px">✨ Recommend one for me</button>
+    <div class="eyebrow" style="margin-bottom:10px">Or build your own</div>
+    <div class="cg-label">Muscle groups</div>
+    <div class="cg-groups" id="cg_groups">
+      ${GROUPS.map(g=>`<button class="cg-chip" data-g="${esc(g)}">${esc(g)}</button>`).join("")}
+    </div>
+    <div class="cg-label">Length</div>
+    <div class="cg-size" id="cg_size">
+      <button class="cg-seg" data-s="quick">Quick<small>3–4</small></button>
+      <button class="cg-seg on" data-s="standard">Standard<small>5–6</small></button>
+      <button class="cg-seg" data-s="full">Full<small>7–8</small></button>
+    </div>
+    <button class="btn fuel block" id="cg_build" style="margin-top:18px">Build my workout</button>`);
+  let size="standard";
+  $("#cg_groups").querySelectorAll("[data-g]").forEach(b=>b.addEventListener("click",()=>{
+    const g=b.dataset.g; if(picked.has(g)){picked.delete(g);b.classList.remove("on");} else {picked.add(g);b.classList.add("on");}
+  }));
+  $("#cg_size").querySelectorAll("[data-s]").forEach(b=>b.addEventListener("click",()=>{
+    size=b.dataset.s; $("#cg_size").querySelectorAll("[data-s]").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  }));
+  $("#cg_rec").addEventListener("click",()=>{ closeModal(); coachGenerateWorkout({size}); });
+  $("#cg_build").addEventListener("click",()=>{
+    if(!picked.size){ toast("Pick at least one muscle group, or tap Recommend"); return; }
+    closeModal(); coachGenerateWorkout({groups:[...picked], size});
+  });
+}
 function parseCoachWorkout(text){
   if(!text) return null;
-  let raw=text.trim();
-  /* strip code fences if present */
-  raw=raw.replace(/^```(json)?/i,"").replace(/```$/,"").trim();
-  /* grab the first {...} block */
-  const m=raw.match(/\{[\s\S]*\}/); if(!m) return null;
-  let obj; try{ obj=JSON.parse(m[0]); }catch(e){ return null; }
+  let raw=String(text).trim();
+  /* strip code fences anywhere */
+  raw=raw.replace(/```(json)?/gi,"").trim();
+  /* some models prepend a safety/classifier line (e.g. "User Safety: safe");
+     drop everything before the first "{" so that preamble doesn't break parsing */
+  const firstBrace=raw.indexOf("{");
+  if(firstBrace>0) raw=raw.slice(firstBrace);
+  /* try the whole {...} span first, then progressively shorter candidates */
+  const candidates=[];
+  const span=raw.match(/\{[\s\S]*\}/); if(span) candidates.push(span[0]);
+  /* also try each balanced object we can find */
+  let depth=0,start=-1;
+  for(let i=0;i<raw.length;i++){
+    const c=raw[i];
+    if(c==="{"){ if(depth===0)start=i; depth++; }
+    else if(c==="}"){ depth--; if(depth===0&&start>=0){ candidates.push(raw.slice(start,i+1)); start=-1; } }
+  }
+  let obj=null;
+  for(const cand of candidates){
+    try{ const o=JSON.parse(cand); if(o&&Array.isArray(o.exercises)){ obj=o; break; } }catch(e){}
+  }
   if(!obj || !Array.isArray(obj.exercises)) return null;
   const exercises=[];
   obj.exercises.forEach(e=>{
@@ -4572,7 +4645,7 @@ const LATEST_NUM="1.0";
 const LATEST_TITLE="Evolve 1.0 — the full release";
 const LATEST_ITEMS=[
   "<b>🎉 Evolve is 1.0!</b> After a long beta, this is the first full release — a complete, private, offline-first gym &amp; nutrition tracker. Everything below is what's new in 1.0; earlier entries were the beta builds that got us here.",
-  "<b>AI Coach can build your workouts</b> — in the Coach tab, tap “Generate a workout” and the AI returns a real, ready-to-use session. <b>Start it now</b> or <b>Save for later</b> — saved ones land in your new Saved workouts list under Train.",
+  "<b>AI Coach can build your workouts</b> — in the Coach tab, tap “Generate a workout”, pick the muscle groups and length you want (or let it recommend one), and the AI returns a real, ready-to-use session. <b>Start it now</b> or <b>Save for later</b> — saved ones land in your new Saved workouts list under Train.",
   "<b>Saved workouts</b> — Train now has a dedicated Saved workouts section. Save any session (tap the ★ during a workout) or a Coach-generated one, and reuse it any time.",
   "<b>Sets pre-fill themselves</b> — no more typing the same weight &amp; reps every time. New sets start pre-filled with your usual numbers (or your last session if newer); you just tap to confirm each one. Set your usual per exercise from the ⋯ menu. Works for machines, free weights and home moves.",
   "<b>AI Coach (optional)</b> — connect your own free OpenRouter key to chat about training &amp; nutrition or analyse your logs. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
