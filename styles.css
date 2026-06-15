@@ -618,9 +618,9 @@ svg.chart{width:100%;height:auto;display:block}
   background:rgba(16,18,24,.78);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border:1px solid var(--line2);border-radius:26px;box-shadow:0 18px 44px rgba(0,0,0,.55);
   display:flex;padding:7px}
-#nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted2);
-  font-size:10px;font-weight:700;letter-spacing:.04em;padding:8px 0 7px;border-radius:19px;transition:background .2s,color .2s}
-#nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted2);
+  font-size:9px;font-weight:700;letter-spacing:.02em;padding:8px 0 7px;border-radius:16px;transition:background .2s,color .2s;white-space:nowrap}
+#nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #nav button.on{color:var(--text);background:rgba(255,255,255,.08)}
 #nav button.on svg{stroke:var(--strength)}
 #nav button.fuelTab.on svg{stroke:var(--fuel)}
@@ -752,3 +752,20 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 .update-banner .btn{flex:0 0 auto;background:rgba(255,255,255,.95);color:#111}
 .update-banner .upd-x{flex:0 0 auto;background:none;border:none;color:rgba(255,255,255,.85);font-size:14px;cursor:pointer;padding:4px}
 @keyframes upd-in{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* v1.0 — coach generated-workout card */
+.cw-card{width:100%;max-width:100%}
+.cw-title{font-weight:800;font-size:15px;margin-bottom:8px}
+.cw-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.cw-ex{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:6px 0;border-bottom:1px solid var(--line2)}
+.cw-ex:last-child{border-bottom:none}
+.cw-exn{flex:1;min-width:0}
+.cw-exs{color:var(--muted);font-weight:700;white-space:nowrap}
+.cw-acts{display:flex;gap:8px}
+.cw-acts .btn{flex:1}
+/* saved-workouts empty state */
+.saved-empty{text-align:center;padding:22px 16px}
+.saved-empty-ic{font-size:30px;margin-bottom:8px;opacity:.7}
+.saved-empty-t{font-weight:800;font-size:15px;margin-bottom:6px}
+.saved-empty-s{color:var(--muted);font-size:13px;line-height:1.5}
+.fav-src{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;color:var(--strength);vertical-align:middle}

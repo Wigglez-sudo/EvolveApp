@@ -6,7 +6,7 @@
 
 **A private, offline-first gym & nutrition tracker that lives entirely on your device.**
 
-`Version 3.31` · Built by **Wigglez**
+`Version 1.0` · Built by **Wigglez**
 
 </div>
 
@@ -26,7 +26,8 @@ It's built for people who want a powerful training and food log *without* handin
 - **Target a muscle group** — tap Chest, Back, Shoulders, Arms, Legs or Core to auto-build a workout; choose how many exercises, focus a sub-muscle, and swap any you don't like.
 - **📋 Programs (routines)** — save a multi-day plan like **Push / Pull / Legs**, then start any day with one tap. Begin from a ready-made template (PPL, Upper/Lower, Full Body ×3) or build your own.
 - **Mega workouts** — mix several muscle groups (plus optional cardio) into one session.
-- **★ Favourites** — star exercises and build a session from them, or save whole workouts to repeat.
+- **★ Favourites** — star exercises and build a session from them.
+- **💾 Saved workouts** — save any session (or a Coach-generated one) and reuse it any time from a dedicated section in Train.
 - **Gym / Home modes** — the exercise pool adapts to where you're training.
 - **Live logging** — sets, reps, weights, supersets, rest timer, previous-set hints and quiet progressive-overload nudges.
 
@@ -51,7 +52,7 @@ It's built for people who want a powerful training and food log *without* handin
 
 ### 🤖 AI Coach *(optional)*
 - A dedicated Coach tab powered by **your own** [OpenRouter](https://openrouter.ai) API key (free models available).
-- **Chat** about your training & nutrition, **generate a workout**, or **analyse your recent logs** — grounded in your actual data.
+- **Chat** about your training & nutrition, **generate a ready-to-use workout** (Start it now or Save for later), or **analyse your recent logs** — grounded in your actual data.
 - 🔒 **Privacy-first:** this is the *only* feature that sends data off your device, and it tells you exactly what's shared before you enable it. Your API key is stored **only on this device**, is **never** included in any backup, and is never sent anywhere except OpenRouter.
 
 ### ⚙️ Settings & personalisation
@@ -118,22 +119,26 @@ Once installed it runs full-screen and works **offline**.
 | `sw.js` | Service worker (offline cache) |
 | `manifest.json` | PWA manifest |
 | `icon-*.png`, `apple-touch-icon.png`, `favicon.png` | App icons |
-| `Evolve-v3.31-preview.html` | Single-file build for quick testing |
+| `Evolve-v1.0-preview.html` | Single-file build for quick testing |
 
 ---
 
-## 📝 Changelog highlights — v3.31
+## 📝 What's new in 1.0
 
-- 🤖 **AI Coach** — optional, bring-your-own-key coaching with strong privacy transparency
-- 📋 **Routines / Programs** — multi-day plans with starter templates and a first-time walkthrough
+After a long beta (the 3.x series), this is Evolve's first full release. Highlights:
+
+- 🤖 **AI Coach that builds workouts** — generate a ready-to-use session and Start it now or Save for later
+- 💾 **Saved workouts** — a dedicated section in Train for sessions you save or the Coach generates
+- ⚡ **Sets pre-fill themselves** — your usual weight & reps (or last session), so you just tap to confirm
+- 🔄 **In-app updates** — an "Update available" banner; one tap to update
+- 📋 **Routines / Programs** — multi-day plans with starter templates and a walkthrough
+- 🏃 **Cardio Ready screen** — the timer waits until you tap Start
 - 📸 **Progress photos** — private, on-device only
 - 📊 **CSV export** of workouts and food
 - 🔢 **1RM training percentages** (60–95%)
-- 🏃 **Cardio Ready screen** — timer waits until you tap Start
 - 🔤 **Heading font** setting (Modern / Bold / Classic)
-- 🍽️ **Faster food logging** — top-of-page + floating Add button, smarter portions, categorised custom foods
-- 🔍 **Zoom disabled** for a more native feel
-- 🛠️ Rest-timer label fix and various polish
+- 🍽️ **Faster food logging** — plate-based, floating Add button, smarter portions, categorised custom foods
+- 🧭 **Cleaner navigation** (Home on the left, Coach on the right) and polish throughout
 
 ---
 

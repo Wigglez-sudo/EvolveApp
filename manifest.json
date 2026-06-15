@@ -1,6 +1,7 @@
 {
   "name": "Evolve",
   "short_name": "Evolve",
+  "version": "1.0.0",
   "description": "Private, offline-first gym & nutrition tracker with encrypted local backup files you can save/share to cloud storage of your choice.",
   "start_url": "./index.html",
   "scope": "./",

@@ -123,6 +123,7 @@ const DEFAULT_DATA = {
   favExercises:[], /* GLOBAL favourites: any exercise/cardio name */
   favWorkouts:[], /* {id,name,exercises:[{name,group}],cardio:{name,met,ic}|null,cardioPos:"start"|"end"} */
   routines:[], /* v3.31: multi-day programs — {id,name,note,days:[{label,exercises:[{name,group}]}]} */
+  usualSets:{}, /* v3.31: per-exercise saved "usual" — { "<exercise name>": {kg, reps} } used to pre-fill sets */
   weeklyPlan:null, /* {weekStart, days:{Mon:{type,label,done}|null,...}, cardioPref} */
   cardio:[],     /* {id,date,name,type,seconds,kcal,distanceKm} */
   log:{},       /* date -> {food:[], water:0, burned:[]} */
@@ -162,6 +163,7 @@ function migrate(d){
   if(typeof d.prefs.showHelpBars!=="boolean") d.prefs.showHelpBars=true; /* show the per-tab "How this page works" bars by default */
   /* v3.31 */
   if(!Array.isArray(d.routines)) d.routines=[]; /* saved multi-day programs */
+  if(!d.usualSets || typeof d.usualSets!=="object" || Array.isArray(d.usualSets)) d.usualSets={}; /* v3.31: per-exercise usual sets */
   if(Array.isArray(d.customFoods)) d.customFoods.forEach(f=>{ if(f && typeof f.cat!=="string") f.cat=""; }); /* optional category tag on custom foods */
   if(!d.statResets || typeof d.statResets!=="object") d.statResets={};
   if(!d.meta || typeof d.meta!=="object") d.meta={};
@@ -1107,15 +1109,16 @@ function renderTrain(){
   rtCard.addEventListener("click",openRoutinesHub);
   b.appendChild(rtCard);
 
-  /* saved favourite workouts */
+  /* saved workouts — always shown so it's discoverable */
+  const shF=el("div","sect-h",`<h3>★ Saved workouts</h3>`); b.appendChild(shF);
   if(DATA.favWorkouts&&DATA.favWorkouts.length){
-    const shF=el("div","sect-h",`<h3>★ Saved workouts</h3>`); b.appendChild(shF);
     const fwCard=el("div","card");
     DATA.favWorkouts.forEach(f=>{
       const wrap=el("div","fav-wrap");
       const r=el("div","lrow");
       const cardioTxt=f.cardio?` + ${f.cardio.ic} cardio`:"";
-      r.innerHTML=`<div class="ico">★</div><div class="main"><div class="t">${esc(f.name)}</div>
+      const src=f.source==="coach"?`<span class="fav-src">🤖 Coach</span>`:"";
+      r.innerHTML=`<div class="ico">★</div><div class="main"><div class="t">${esc(f.name)}${src}</div>
         <div class="s">${f.exercises.length} exercise${f.exercises.length===1?"":"s"}${cardioTxt} <span class="fav-caret">▾</span></div></div>`;
       const go=el("button","btn sm str","Start"); go.addEventListener("click",e=>{e.stopPropagation();startFavWorkout(f);});
       const del=el("button","del","×"); del.addEventListener("click",e=>{e.stopPropagation();deleteFavWorkout(f.id);});
@@ -1130,6 +1133,14 @@ function renderTrain(){
       fwCard.appendChild(wrap);
     });
     b.appendChild(fwCard);
+  } else {
+    const empty=el("div","card");
+    empty.innerHTML=`<div class="saved-empty">
+      <div class="saved-empty-ic">★</div>
+      <div class="saved-empty-t">No saved workouts yet</div>
+      <div class="saved-empty-s">During any workout, tap the ★ at the top to save it here to reuse any time. The AI Coach can also generate workouts you can save straight to this list.</div>
+    </div>`;
+    b.appendChild(empty);
   }
 }
 function cardioEntryCard(){
@@ -1187,7 +1198,7 @@ function renderHomeZone(b){
   const qb=el("button","btn str block","Start 15-min circuit"); qb.style.marginTop="6px";
   qb.addEventListener("click",()=>{
     const pool=HOME.filter(h=>h.eq.includes("none"));
-    const ex=shuffle(pool.slice()).slice(0,6).map(h=>({name:h.n,group:h.t,home:h,sets:[blankSet()]}));
+    const ex=shuffle(pool.slice()).slice(0,6).map(h=>({name:h.n,group:h.t,home:h,sets:[prefilledSet(h.n)]}));
     if(!ex.length){toast("No bodyweight moves found");return;}
     startSession("Quick circuit","home",ex);
   });
@@ -1373,7 +1384,7 @@ function openBonusDay(dn){
 }
 let plannedDayRef=null;
 
-function mkExercise(name){const m=EX_BY_NAME[name]; return {name, group:m?m.g:"", sets:[blankSet()]};}
+function mkExercise(name){const m=EX_BY_NAME[name]; return {name, group:m?m.g:"", sets:[prefilledSet(name)]};}
 function mkCardioCard(act, suggestMin){
   const name=act.name||act.n;
   return {cardio:true, name, group:"Cardio", activity:{name, met:act.met, ic:act.ic}, suggestMin:suggestMin||15, done:false, result:null, sets:[]};
@@ -1519,7 +1530,7 @@ function saveFavWorkout(exercises, cardio, cardioPos, defaultName){
   });
 }
 function startFavWorkout(fav){
-  const strength=fav.exercises.map(e=>e.home?{name:e.name,group:e.group,home:e.home,sets:[blankSet()]}:mkExercise(e.name));
+  const strength=fav.exercises.map(e=>e.home?{name:e.name,group:e.group,home:e.home,sets:[prefilledSet(e.name)]}:mkExercise(e.name));
   let ex=strength.slice();
   if(fav.cardio){ const cc=mkCardioCard(fav.cardio);
     if(fav.cardioPos==="start")ex=[cc,...ex]; else ex=[...ex,cc]; }
@@ -1549,6 +1560,22 @@ function lastSetFor(name){
       if(s) return s; } }
   return null;
 }
+/* v3.31 — per-exercise "usual" weight & reps, used to pre-fill sets */
+function usualFor(name){ const u=DATA.usualSets&&DATA.usualSets[name]; return (u&&(+u.kg>0||+u.reps>0))?u:null; }
+function setUsual(name,kg,reps){
+  if(!DATA.usualSets)DATA.usualSets={};
+  if((+kg>0)||(+reps>0)) DATA.usualSets[name]={kg:(kg===""||kg==null)?"":+kg, reps:(reps===""||reps==null)?"":+reps};
+  else delete DATA.usualSets[name];
+  save();
+}
+/* a fresh set, pre-filled from your usual, overridden by your last actual session if there is one */
+function prefillValues(name){
+  const u=usualFor(name); const last=lastSetFor(name);
+  let kg=u?u.kg:"", reps=u?u.reps:"";
+  if(last && (+last.kg>0||+last.reps>0)){ if(+last.kg>0)kg=+last.kg; if(+last.reps>0)reps=+last.reps; }
+  return {kg, reps};
+}
+function prefilledSet(name){ const v=prefillValues(name); return {kg:v.kg, reps:v.reps, done:false}; }
 
 /* ---------- INFO ⓘ POPOVERS ---------- */
 const INFO_TEXT={
@@ -1615,7 +1642,7 @@ function randomizeFavWorkout(){
     $("#rf_n").querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on");n=+b.dataset.v;}));
   $("#rf_go").addEventListener("click",()=>{
     const chosen=shuffle(pool.slice()).slice(0,Math.min(n,pool.length));
-    const ex=chosen.map(x=>{ if(x.kind==="home"){const h=HOME.find(z=>z.n===x.n);return {name:x.n,group:h?h.t:"",home:h,sets:[blankSet()]};} return mkExercise(x.n); });
+    const ex=chosen.map(x=>{ if(x.kind==="home"){const h=HOME.find(z=>z.n===x.n);return {name:x.n,group:h?h.t:"",home:h,sets:[prefilledSet(x.n)]};} return mkExercise(x.n); });
     if($("#rf_cardio").checked){ const cfav=favList().filter(x=>x.kind==="cardio"); const cardios=cfav.length?cfav:CARDIO.map(c=>({n:c.n}));
       const pick=CARDIO.find(c=>c.n===shuffle(cardios.slice())[0].n); if(pick)ex.push(mkCardioCard(pick)); }
     if(!ex.length){toast("Nothing to build");return;}
@@ -1684,7 +1711,7 @@ function openRoutineView(r){
 }
 function startRoutineDay(r,i){
   const d=(r.days||[])[i]; if(!d||!(d.exercises||[]).length){toast("That day has no exercises");return;}
-  const ex=d.exercises.map(e=>{ const m=EX_BY_NAME[e.name]; return m?mkExercise(e.name):{name:e.name,group:e.group||"",sets:[blankSet()]}; });
+  const ex=d.exercises.map(e=>{ const m=EX_BY_NAME[e.name]; return m?mkExercise(e.name):{name:e.name,group:e.group||"",sets:[prefilledSet(e.name)]}; });
   startSession(r.name+" · "+(d.label||("Day "+(i+1))),"routine",ex);
 }
 /* working draft while editing a routine */
@@ -1993,11 +2020,33 @@ function renderCoach(){
   if(!coachChat.length){
     log.innerHTML=`<div class="coach-empty muted">Ask anything about your training or nutrition — e.g. "how do I bring up my shoulders?" or "is my protein high enough?"</div>`;
   } else {
-    log.innerHTML=coachChat.map(m=>`<div class="coach-msg ${m.role}"><div class="coach-bubble">${m.role==="assistant"?coachFormat(m.content):esc(m.content)}</div></div>`).join("");
+    log.innerHTML=coachChat.map((m,idx)=>{
+      if(m.role==="assistant" && typeof m.content==="string" && m.content.indexOf("__WORKOUT__")===0){
+        let wk=null; try{ wk=JSON.parse(m.content.slice(11)); }catch(e){}
+        if(wk && wk.exercises){
+          const rows=wk.exercises.map(e=>`<div class="cw-ex"><span class="cw-exn">${esc(e.name)}</span><span class="cw-exs">${e.sets}×${esc(e.reps||"—")}</span></div>`).join("");
+          return `<div class="coach-msg assistant"><div class="coach-bubble cw-card">
+            <div class="cw-title">🏋️ ${esc(wk.title||"Coach workout")}</div>
+            <div class="cw-list">${rows}</div>
+            <div class="cw-acts">
+              <button class="btn str sm" data-cw-start="${idx}">▶ Start now</button>
+              <button class="btn sm" data-cw-save="${idx}">★ Save for later</button>
+            </div></div></div>`;
+        }
+      }
+      return `<div class="coach-msg ${m.role}"><div class="coach-bubble">${m.role==="assistant"?coachFormat(m.content):esc(m.content)}</div></div>`;
+    }).join("");
   }
   b.appendChild(log);
-
-  /* input row */
+  /* wire any generated-workout cards */
+  log.querySelectorAll("[data-cw-start]").forEach(btn=>btn.addEventListener("click",()=>{
+    const m=coachChat[+btn.dataset.cwStart]; if(!m)return; let wk=null; try{wk=JSON.parse(m.content.slice(11));}catch(e){}
+    if(wk) coachStartWorkout(wk);
+  }));
+  log.querySelectorAll("[data-cw-save]").forEach(btn=>btn.addEventListener("click",()=>{
+    const m=coachChat[+btn.dataset.cwSave]; if(!m)return; let wk=null; try{wk=JSON.parse(m.content.slice(11));}catch(e){}
+    if(wk) coachSaveWorkout(wk);
+  }));
   const inRow=el("div","coach-input");
   inRow.innerHTML=`<input class="input" id="coach_q" placeholder="Ask your coach…" autocomplete="off"><button class="btn str" id="coach_send">Send</button>`;
   b.appendChild(inRow);
@@ -2031,10 +2080,101 @@ async function coachSend(q){
   coachBusy(false); renderCoach();
 }
 async function coachAction(kind){
-  const prompt = kind==="generate"
-    ? "Generate a single workout session for me for today, based on my goal, equipment and recent training. List exercises with sets and rep ranges. Keep it practical."
-    : "Analyse my recent workouts and nutrition context. Point out 2-3 specific things going well and 2-3 things to improve, with concrete next steps.";
+  if(kind==="generate"){ return coachGenerateWorkout(); }
+  const prompt = "Analyse my recent workouts and nutrition context. Point out 2-3 specific things going well and 2-3 things to improve, with concrete next steps.";
   coachSend(prompt);
+}
+
+/* ---- structured workout generation: AI returns JSON the app can turn into a real workout ---- */
+function coachExercisePool(){
+  /* the names the AI is allowed to choose from, matched to what's in the app */
+  try{ return (typeof gymPoolNames==="function")?gymPoolNames():Object.keys(EX_BY_NAME||{}); }
+  catch(e){ return Object.keys(EX_BY_NAME||{}); }
+}
+function coachMatchExercise(name){
+  if(!name) return null;
+  const pool=Object.keys(EX_BY_NAME||{});
+  const norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  const target=norm(name);
+  /* exact, then case-insensitive, then contains, then token-overlap */
+  if(EX_BY_NAME[name]) return name;
+  let hit=pool.find(n=>norm(n)===target); if(hit) return hit;
+  hit=pool.find(n=>norm(n).includes(target)||target.includes(norm(n))); if(hit) return hit;
+  const tw=target.split(" ").filter(Boolean);
+  let best=null,bestScore=0;
+  pool.forEach(n=>{ const nw=norm(n).split(" "); const ov=tw.filter(t=>nw.includes(t)).length; if(ov>bestScore){bestScore=ov;best=n;} });
+  return bestScore>=2?best:null; /* need a decent overlap to avoid nonsense matches */
+}
+async function coachGenerateWorkout(){
+  const pool=coachExercisePool();
+  /* cap the list we send so the prompt isn't huge, but include a good spread */
+  const allowed=pool.slice(0,180);
+  const sys=`You are a strength coach. Generate ONE workout session for the user from their data.
+Respond with ONLY valid JSON (no markdown, no prose, no code fences) in EXACTLY this shape:
+{"title":"string","exercises":[{"name":"string","sets":number,"reps":"string"}]}
+Rules:
+- Choose "name" values ONLY from this allowed list (copy the exact spelling): ${JSON.stringify(allowed)}
+- 4 to 7 exercises. "reps" can be a range like "8-12". "sets" is a whole number.
+- Pick exercises suitable for the user's goal, equipment and recent training.
+- Output the JSON object and nothing else.`;
+  coachChat.push({role:"user",content:"🏋️ Generate a workout"});
+  coachChat.push({role:"assistant",content:"…building your workout"});
+  renderCoach(); coachBusy(true);
+  try{
+    const msgs=[{role:"system",content:sys+"\n\nUser's training data:\n"+coachContext()},
+      {role:"user",content:"Generate my workout now as JSON only."}];
+    const reply=await coachAsk(msgs);
+    const wk=parseCoachWorkout(reply);
+    if(!wk || !wk.exercises.length){
+      coachChat[coachChat.length-1]={role:"assistant",content:"I couldn't read a workout from that response. Try again, or switch model in Coach settings."};
+    } else {
+      coachChat[coachChat.length-1]={role:"assistant",content:"__WORKOUT__"+JSON.stringify(wk)};
+    }
+  }catch(e){
+    coachChat[coachChat.length-1]={role:"assistant",content:"⚠️ "+(e.message||"Something went wrong.")};
+  }
+  coachBusy(false); renderCoach();
+}
+function parseCoachWorkout(text){
+  if(!text) return null;
+  let raw=text.trim();
+  /* strip code fences if present */
+  raw=raw.replace(/^```(json)?/i,"").replace(/```$/,"").trim();
+  /* grab the first {...} block */
+  const m=raw.match(/\{[\s\S]*\}/); if(!m) return null;
+  let obj; try{ obj=JSON.parse(m[0]); }catch(e){ return null; }
+  if(!obj || !Array.isArray(obj.exercises)) return null;
+  const exercises=[];
+  obj.exercises.forEach(e=>{
+    const matched=coachMatchExercise(e&&e.name);
+    if(matched){
+      const sets=Math.max(1,Math.min(10, parseInt(e.sets,10)||3));
+      const reps=(e.reps!=null?String(e.reps):"").slice(0,12);
+      exercises.push({name:matched, group:(EX_BY_NAME[matched]||{}).g||"", sets, reps});
+    }
+  });
+  if(!exercises.length) return null;
+  return {title:(obj.title?String(obj.title):"Coach workout").slice(0,40), exercises};
+}
+/* turn a parsed coach workout into a live session and start it */
+function coachStartWorkout(wk){
+  const ex=wk.exercises.map(e=>{
+    const m=mkExercise(e.name); /* prefilled first set */
+    /* add the suggested number of sets */
+    const target=Math.max(1,e.sets||3);
+    while(m.sets.length<target){ m.sets.push(blankSet(m.sets[m.sets.length-1])); }
+    return m;
+  });
+  startSession(wk.title||"Coach workout","coach",ex);
+}
+/* save a coach workout into the user's Saved workouts (favWorkouts) */
+function coachSaveWorkout(wk){
+  if(!DATA.favWorkouts)DATA.favWorkouts=[];
+  DATA.favWorkouts.unshift({id:Date.now(), name:wk.title||"Coach workout", source:"coach",
+    exercises:wk.exercises.map(e=>({name:e.name, group:e.group, home:null})),
+    cardio:null, cardioPos:"end"});
+  save(); toast("★ Saved to your workouts");
+  renderCoach();
 }
 
 /* ===================== GROUP BUILDER ===================== */
@@ -2221,7 +2361,7 @@ function openHomeBuilder(){
     /* Full body: no muscle filter (keep all matching equipment) */
     if(!pool.length){toast("No exercises match — add equipment or change focus");return;}
     const chosen=shuffle(pool).slice(0,Math.min(count,pool.length));
-    const ex=chosen.map(h=>({name:h.n,group:h.t,home:h,sets:[blankSet()]}));
+    const ex=chosen.map(h=>({name:h.n,group:h.t,home:h,sets:[prefilledSet(h.n)]}));
     closeModal(); startSession("Home · "+focus,"home",ex);
     if(chosen.length<count) toast(`Built ${chosen.length} — that's all that fit your equipment & focus`);
   });
@@ -2333,7 +2473,7 @@ function openMegaBuilder(){
       if(focus==="Core")pool=pool.filter(h=>h.t==="Core");
       if(!pool.length){toast("No exercises match — add equipment");return;}
       const cnt = st.mode==="random" ? 6 : st.homeCount;
-      shuffle(pool).slice(0,Math.min(cnt,pool.length)).forEach(h=>exercises.push({name:h.n,group:h.t,home:h,sets:[blankSet()]}));
+      shuffle(pool).slice(0,Math.min(cnt,pool.length)).forEach(h=>exercises.push({name:h.n,group:h.t,home:h,sets:[prefilledSet(h.n)]}));
       title="Mega · Home "+focus;
     }
     if(st.doCardio){
@@ -2671,6 +2811,7 @@ function openExerciseMenu(ex,xi){
       <button class="menu-item" data-a="info">ⓘ How to perform</button>
       ${!ex.home?`<button class="menu-item" data-a="swap">🔄 Swap exercise</button>`:""}
       <button class="menu-item" data-a="warm">🔥 Add warm-up sets</button>
+      <button class="menu-item" data-a="usual">📌 Set usual weight &amp; reps${usualFor(ex.name)?" · saved":""}</button>
       ${isFW?`<button class="menu-item" data-a="plates">⚖️ Plate calculator</button>`:""}
       <button class="menu-item" data-a="rest">⏱️ Rest for this exercise${ex.restSec!=null?` · ${ex.restSec===0?"off":ex.restSec+"s"}`:""}</button>
       <button class="menu-item danger" data-a="remove">× Remove exercise</button>
@@ -2680,11 +2821,37 @@ function openExerciseMenu(ex,xi){
     if(a==="info"){ closeModal(); ex.home?showHomeHowTo(ex.home):showHowTo(ex.name); return; }
     if(a==="swap"){ closeModal(); swapExercise(xi); return; }
     if(a==="warm"){ closeModal(); genWarmups(ex); return; }
+    if(a==="usual"){ closeModal(); openSetUsual(ex); return; }
     if(a==="plates"){ closeModal(); openPlateCalc(ex); return; }
     if(a==="rest"){ closeModal(); openExerciseRest(ex); return; }
     if(a==="remove"){ closeModal(); removeLiveExercise(xi); return; }
   };
   $("#modal").querySelectorAll("[data-a]").forEach(btn=>btn.addEventListener("click",()=>act(btn.dataset.a)));
+}
+
+/* editor: save your "usual" weight & reps for an exercise (pre-fills future workouts) */
+function openSetUsual(ex){
+  const u=usualFor(ex.name)||{kg:"",reps:""};
+  const unit=(typeof liftUnit==="function" && liftUnit()==="lb")?"lb":"kg";
+  const kgShown=(u.kg!==""&&u.kg!=null)?(typeof liftFromKg==="function"?liftRound(liftFromKg(+u.kg)):u.kg):"";
+  openModal(`<h3>Usual for ${esc(ex.name)}</h3>
+    <p class="muted tiny" style="line-height:1.5;margin-bottom:14px">Set the weight &amp; reps you usually aim for. Future workouts with this exercise will start pre-filled with these — your most recent logged set takes priority if it's different. You still tap each set to log it.</p>
+    <div class="row" style="gap:10px">
+      <div class="field" style="flex:1"><label>Usual weight (${unit})</label><input class="input" id="usual_kg" type="number" inputmode="decimal" placeholder="—" value="${kgShown}"></div>
+      <div class="field" style="flex:1"><label>Usual reps</label><input class="input" id="usual_reps" type="number" inputmode="numeric" placeholder="—" value="${(u.reps!==""&&u.reps!=null)?u.reps:""}"></div>
+    </div>
+    <button class="btn str block" id="usual_save">Save usual</button>
+    ${usualFor(ex.name)?`<button class="btn ghost block" id="usual_clear" style="margin-top:10px">Clear usual</button>`:""}`);
+  $("#usual_save").addEventListener("click",()=>{
+    const rawKg=$("#usual_kg").value.trim(), reps=$("#usual_reps").value.trim();
+    let kg=rawKg;
+    if(rawKg!=="" && typeof kgFromLift==="function") kg=kgFromLift(+rawKg); /* convert displayed unit → kg for storage */
+    setUsual(ex.name, kg===""?"":kg, reps===""?"":reps);
+    /* apply immediately to the current exercise's not-yet-done sets that are still empty */
+    (ex.sets||[]).forEach(s=>{ if(!s.done){ const v=prefillValues(ex.name); if(s.kg===""||s.kg==null)s.kg=v.kg; if(s.reps===""||s.reps==null)s.reps=v.reps; } });
+    persistLive(); closeModal(); toast("Usual saved"); renderLive();
+  });
+  const clr=$("#usual_clear"); if(clr)clr.addEventListener("click",()=>{ setUsual(ex.name,"",""); closeModal(); toast("Usual cleared"); renderLive(); });
 }
 
 /* remove an exercise from the live session, with confirmation */
@@ -4400,22 +4567,29 @@ function backupReminder(){
   $("#wf_backup").addEventListener("click",()=>{closeModal();setTimeout(()=>{try{openExport();}catch(e){switchTab("more");}},180);});
   $("#wf_later").addEventListener("click",closeModal);
 }
-const LAST_UPDATED="14 June 2026";
-const LATEST_NUM="3.31";
-const LATEST_TITLE="Routines, progress photos, CSV export & logger polish";
+const LAST_UPDATED="15 June 2026";
+const LATEST_NUM="1.0";
+const LATEST_TITLE="Evolve 1.0 — the full release";
 const LATEST_ITEMS=[
-  "<b>In-app updates</b> — Evolve now updates itself. When a new version is live you'll get an “Update available” banner; one tap and you're on the latest. No more closing and reopening the app. There's also a “Check for updates” button in Settings → Help &amp; guide.",
-  "<b>AI Coach (optional)</b> — a new Coach tab. Connect your own free OpenRouter key to chat about training &amp; nutrition, generate workouts, or analyse your logs. Pick from current free models (or “Auto”), with a one-tap “Load current free models” button so the list never goes stale. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
-  "<b>Choose your heading font</b> — Settings → Preferences now has Modern, Bold and Classic styles. Modern (clean and legible) is the new default.",
-  "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap.",
+  "<b>🎉 Evolve is 1.0!</b> After a long beta, this is the first full release — a complete, private, offline-first gym &amp; nutrition tracker. Everything below is what's new in 1.0; earlier entries were the beta builds that got us here.",
+  "<b>AI Coach can build your workouts</b> — in the Coach tab, tap “Generate a workout” and the AI returns a real, ready-to-use session. <b>Start it now</b> or <b>Save for later</b> — saved ones land in your new Saved workouts list under Train.",
+  "<b>Saved workouts</b> — Train now has a dedicated Saved workouts section. Save any session (tap the ★ during a workout) or a Coach-generated one, and reuse it any time.",
+  "<b>Sets pre-fill themselves</b> — no more typing the same weight &amp; reps every time. New sets start pre-filled with your usual numbers (or your last session if newer); you just tap to confirm each one. Set your usual per exercise from the ⋯ menu. Works for machines, free weights and home moves.",
+  "<b>AI Coach (optional)</b> — connect your own free OpenRouter key to chat about training &amp; nutrition or analyse your logs. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
+  "<b>In-app updates</b> — Evolve updates itself now. When a new version is live you'll get an “Update available” banner; one tap and you're on the latest. There's also a “Check for updates” button in Settings → Help &amp; guide.",
+  "<b>Cleaner navigation</b> — Home now sits on the far left, with the new Coach tab on the right.",
+  "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap. Starter templates and a quick walkthrough included.",
+  "<b>Cardio Ready screen</b> — a fresh cardio waits on a Ready screen and only starts timing when you tap ▶ Start.",
   "<b>Progress photos</b> — a private photo timeline in Progress → Trends, stored only on this device and never uploaded or backed up.",
   "<b>CSV export</b> — save your workouts or food log as a spreadsheet (Settings → Backup) for your own records.",
-  "<b>1RM training percentages</b> — the strength sheet now shows 60–95% of your estimated 1RM for percentage-based programming.",
-  "<b>Faster food logging</b> — ＋ Add food now sits at the top of Fuel, with a floating ＋ that follows you as you scroll.",
-  "<b>Smarter portions</b> — common foods show a sensible portion (1 egg, 1 slice) while everything else uses grams; you can always type grams.",
-  "<b>Your own foods, categorised</b> — tag a custom food with a category so it shows up there as well as under My foods.",
-  "<b>Fixes</b> — rest-timer labels now read 1:30 / 2:30 (not 1.5:30), and the welcome screen icon sits without a frame."
+  "<b>1RM training percentages</b> — the strength sheet shows 60–95% of your estimated 1RM for percentage-based programming.",
+  "<b>Choose your heading font</b> — Modern, Bold or Classic in Settings → Preferences.",
+  "<b>Faster food logging</b> — plate-based logging, a floating ＋ Add food button, smarter portions and categorised custom foods.",
+  "<b>Polish &amp; fixes throughout</b> — rest-timer labels, zoom disabled for a native feel, and dozens of refinements from the beta."
 ];
+const HISTORY_BETA={num:"3.x beta",title:"The beta series",items:[
+  "Everything below is from Evolve's beta builds (versioned 3.x) — the food logger overhaul, encrypted cloud-safe backups, the redesigned live workout screen, supersets, cardio resume, manual macro targets, Mega workouts, and much more. 1.0 brings it all together as the first full release."
+]};
 const HISTORY_330={num:"3.30-test",title:"Rebuilt food logger",items:[
   "<b>Plate-based logger</b> — add several foods to a running plate, then log the whole meal at once.",
   "<b>Results show first</b> — categories tucked behind a ▾ toggle so they don't bury your search results.",
@@ -4431,6 +4605,7 @@ function openChangelog(){
     <div class="tiny muted" style="margin:-4px 0 10px">Last updated ${LAST_UPDATED}</div>
     <div style="max-height:62vh;overflow:auto;margin-top:4px">
     ${v(LATEST_NUM,LATEST_TITLE,LATEST_ITEMS)}
+    ${v(HISTORY_BETA.num,HISTORY_BETA.title,HISTORY_BETA.items)}
     ${v(HISTORY_330.num,HISTORY_330.title,HISTORY_330.items)}
     ${v("3.29-test","Simple encrypted cloud save",[
       "<b>Simpler cloud-safe backups</b> — Evolve creates an encrypted backup file locally, then opens your phone's Save/Share sheet so you choose iCloud, Files, Drive or anywhere.",
@@ -4602,7 +4777,7 @@ function openGuide(){
     ${sec("🏋️","Train tab","Your workout library. Switch between <b>Gym</b> and <b>Home</b> at the top. Tap a muscle group to build a session — pick a focus like Biceps or Quads, choose how many exercises, then re-roll, add or remove before starting. <b>Mega Workout</b> mixes several groups plus cardio, preset days start with one tap, and the green <b>Cardio</b> card opens all 40 cardio activities.")}
     ${sec("🗓️","Plan my week","Tap the days you can train and Evolve builds a balanced split (Push/Pull/Legs, Upper/Lower…) with rest and cardio slotted in. Tap <b>today's block</b> to start it. Got unexpected free time? Tap a rest day to add a <b>bonus workout</b> and optionally rebalance the rest of the week. Edit or clear the plan any time.")}
     ${sec("⭐","Favourites","Tap the ☆ on any exercise, machine or cardio to favourite it. Open the <b>★ Favs</b> hub to see them split by Gym/Home and hit <b>🎲 Build from favourites</b> for an instant session of moves you love.")}
-    ${sec("▶️","Live tracker","Log weight & reps with the steppers. <b>👻 Last time</b> shows your previous numbers to beat. Tools per exercise: <b>⚖️ Plates</b> (barbell math), <b>🔥 Warm-up</b> (auto prep sets), <b>🔄 Swap</b> (busy machine), <b>⏱️ Rest</b> (custom timer), and <b>🔗 Superset</b> to pair two moves. Log <b>RIR</b> (reps in reserve) to track effort.")}
+    ${sec("▶️","Live tracker","Log weight & reps with the steppers. New sets come <b>pre-filled</b> with your usual numbers (or your last session if newer) — just tap to confirm each one. Set your <b>📌 usual weight &amp; reps</b> per exercise from the ⋯ menu so future workouts start ready. <b>👻 Last time</b> shows your previous numbers to beat. Tools per exercise: <b>⚖️ Plates</b> (barbell math), <b>🔥 Warm-up</b> (auto prep sets), <b>🔄 Swap</b> (busy machine), <b>⏱️ Rest</b> (custom timer), and <b>🔗 Superset</b> to pair two moves. Log <b>RIR</b> (reps in reserve) to track effort.")}
     ${sec("🍎","Fuel tab","Set targets in your profile, then log food from the 700+ database (or add your own). Track water and see calories, protein, carbs and fat against your daily goal. Burned calories from cardio can roll into your budget (toggle in Preferences).")}
     ${sec("📊","Progress tab","Your <b>Last 30 days</b> summary and key stats stay pinned at the top; everything else sits in tidy <b>drop-down sections</b> you tap to open — weight trend, lifting volume, strength per exercise with an <b>Est. 1RM</b>, the <b>calendar</b> (orange = lifting, green = cardio), streaks, a <b>Mega workouts</b> summary, and your full history. Tap any workout in your history to expand its exercises &amp; weights; long lists page 5 at a time.")}
     ${sec("📸","After a workout","Get a summary with your volume, PRs and badges, then tap <b>Share summary card</b> for a branded image to save or post.")}
@@ -4942,7 +5117,7 @@ function renderMore(){
   b.appendChild(made.danger);
   Object.values(made).forEach(s=>s._openIfRemembered());
 
-  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 3.31`));
+  b.appendChild(el("div","center muted tiny",`Evolve · Created by Wigglez · Version 1.0`));
   b.lastChild.style.padding="18px 0 4px";
 }
 
