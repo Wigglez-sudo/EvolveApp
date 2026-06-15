@@ -1,19 +1,20 @@
 name: Update food database
 
 # Builds the per-shop UK food packs from Open Food Facts and commits them
-# into food-db/. Runs monthly, or on demand from the Actions tab.
+# into food-db/. Round-robins the shops with long retry backoff so a busy
+# API fills every shop as much as possible. Runs monthly or on demand.
 
 on:
   workflow_dispatch:
     inputs:
-      target_count:
-        description: "Total foods to aim for across all shops"
+      per_shop_target:
+        description: "Foods to aim for PER shop"
         required: false
-        default: "8000"
+        default: "2500"
       max_pages_per_store:
-        description: "Max Open Food Facts pages per supermarket"
+        description: "Hard page ceiling per shop"
         required: false
-        default: "80"
+        default: "120"
   schedule:
     - cron: "0 4 1 * *"   # 04:00 UTC on the 1st of each month
 
@@ -27,7 +28,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
@@ -41,8 +42,8 @@ jobs:
 
       - name: Build food packs from Open Food Facts
         env:
-          EVOLVE_FOOD_TARGET: ${{ github.event.inputs.target_count || '8000' }}
-          EVOLVE_FOOD_MAX_PAGES_PER_STORE: ${{ github.event.inputs.max_pages_per_store || '80' }}
+          EVOLVE_FOOD_PER_SHOP_TARGET: ${{ github.event.inputs.per_shop_target || '2500' }}
+          EVOLVE_FOOD_MAX_PAGES_PER_STORE: ${{ github.event.inputs.max_pages_per_store || '120' }}
           EVOLVE_FOOD_USER_AGENT: "Evolve food database builder - https://github.com/Wigglez-sudo/EvolveAppTest"
         run: node tools/build-openfoodfacts-uk-db.js
 
