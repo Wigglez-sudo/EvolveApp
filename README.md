@@ -128,7 +128,7 @@ Once installed it runs full-screen and works **offline**.
 | `icon-*.png`, `apple-touch-icon.png`, `favicon.png` | App icons |
 | `food-db/` | Generated per-shop food packs + manifest (built by the Action) |
 | `tools/` | Open Food Facts build & validation scripts |
-| `.github/workflows/` | Monthly food-database update workflow |
+| `.github/workflows/` | Food-database update workflow (monthly + on demand); optional Pages deploy |
 | `Evolve-v1.0-preview.html` | Single-file build for quick testing |
 
 ---

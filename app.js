@@ -115,7 +115,7 @@ const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
   prefs:{energy:"kcal", addExercise:true, showAchievements:true, showHelpBars:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
-    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"modern",
+    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"classic",
     coachConsent:false, coachModel:"openrouter/free"},
   customFoods:[], /* {name,kcal,p,c,f} per 100g, user-added */
   favFoods:[],  /* GLOBAL favourite food names */
@@ -148,7 +148,16 @@ function migrate(d){
   if(d.prefs.targetMode!=="manual") d.prefs.targetMode="auto"; /* auto = formula targets; manual = user-set calories & macros */
   /* v3.22 — new preference defaults (kept here so existing users carry over untouched) */
   if(!(Number(d.prefs.restDefault)>0)) d.prefs.restDefault=90;       /* default rest-timer length (seconds) */
-  if(!d.prefs.headingFont) d.prefs.headingFont="modern";             /* v3.31: heading font style */
+  if(!d.prefs.headingFont) d.prefs.headingFont="classic";            /* v3.31: heading font style (1.0: Classic default) */
+  /* 1.0 — adopt Classic (Bebas) as the app's display font globally. Existing
+     installs still on the OLD "modern" default are moved to "classic" ONCE
+     (guarded by a flag) so the change reaches them; a deliberate later choice
+     of any font sticks and is never re-flipped. */
+  if(!d.meta || typeof d.meta!=="object") d.meta={};
+  if(!d.meta.classicFontApplied){
+    if(d.prefs.headingFont==="modern") d.prefs.headingFont="classic";
+    d.meta.classicFontApplied=true;
+  }
   if(typeof d.prefs.coachConsent!=="boolean") d.prefs.coachConsent=false; /* v3.31: AI Coach privacy consent */
   if(!d.prefs.coachModel) d.prefs.coachModel="openrouter/free";
   /* v3.31: retire model slugs OpenRouter has dropped, and move the old default to the free router */
@@ -217,16 +226,16 @@ applyTheme((DATA.prefs&&DATA.prefs.theme)||"ember");
 
 /* v3.31 — heading font styles, switchable in Settings → Preferences */
 const HEADING_FONTS={
-  modern:{label:"Modern",   stack:'"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif', spacing:"-0.01em", sample:"Clean & legible"},
-  bold:  {label:"Bold",     stack:'"Archivo","Inter",sans-serif',                                          spacing:"-0.02em", sample:"Strong & sporty"},
-  classic:{label:"Classic", stack:'"Bebas Neue","Inter",sans-serif',                                        spacing:"0.02em",  sample:"Tall gym poster"}
+  modern:{label:"Modern",   stack:'"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif', spacing:"-0.01em", sample:"Clean, rounded sans-serif — the most legible option."},
+  bold:  {label:"Bold",     stack:'"Archivo","Inter",sans-serif',                                          spacing:"-0.02em", sample:"Wide, heavy and sporty — strong without shouting."},
+  classic:{label:"Classic", stack:'"Bebas Neue","Inter",sans-serif',                                        spacing:"0.02em",  sample:"Tall, condensed gym-poster capitals (default)."}
 };
 function applyHeadingFont(id){
   const f=HEADING_FONTS[id]||HEADING_FONTS.modern; const r=document.documentElement.style;
   r.setProperty("--font-disp",f.stack);
   r.setProperty("--font-disp-spacing",f.spacing);
 }
-applyHeadingFont((DATA.prefs&&DATA.prefs.headingFont)||"modern");
+applyHeadingFont((DATA.prefs&&DATA.prefs.headingFont)||"classic");
 
 /* ===================== DATE HELPERS (device clock) ===================== */
 function todayISO(d){d=d||new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
@@ -5022,6 +5031,7 @@ function renderMore(){
     const hf=el("div"); hf.style.marginTop="18px";
     const curHF=DATA.prefs.headingFont||"modern";
     hf.innerHTML=`<div class="tiny muted" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Heading font</div>
+      <div class="tiny muted" style="margin-bottom:10px;line-height:1.5">The display font used for titles, headers and the logo. Body text stays the same for readability.</div>
       <div class="seg" id="pf_hfont">${Object.keys(HEADING_FONTS).map(k=>`<button data-v="${k}" class="${curHF===k?'on':''}" style="font-family:${HEADING_FONTS[k].stack};font-weight:800;font-size:16px">${HEADING_FONTS[k].label}</button>`).join("")}</div>
       <div class="tiny muted" id="pf_hfont_lab" style="margin-top:8px">${HEADING_FONTS[curHF].sample}</div>`;
     body.appendChild(hf);
@@ -5500,8 +5510,11 @@ checkBackupReminderOnOpen();
 let deferredInstall=null;
 function isStandalone(){ return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone===true; }
 window.addEventListener("beforeinstallprompt",(e)=>{ e.preventDefault(); deferredInstall=e;
-  if($("#view-more") && $("#view-more").classList.contains("active")) renderMore(); });
+  if($("#view-more") && $("#view-more").classList.contains("active")) renderMore();
+  /* if the prompt arrives after the banner is up, upgrade "How" → one-tap "Install" */
+  if($("#installBanner") && !installBannerDismissed){ $("#installBanner").remove(); showInstallBanner(); } });
 window.addEventListener("appinstalled",()=>{ deferredInstall=null; toast("Evolve installed 🎉");
+  if($("#installBanner")) $("#installBanner").remove();
   if($("#view-more") && $("#view-more").classList.contains("active")) renderMore(); });
 async function tryInstall(){
   if(deferredInstall){ deferredInstall.prompt(); try{await deferredInstall.userChoice;}catch(e){} deferredInstall=null; renderMore(); return; }
@@ -5513,6 +5526,38 @@ async function tryInstall(){
     </div>
     <button class="btn str block" id="inst_ok" style="margin-top:16px">Got it</button>`);
   $("#inst_ok").addEventListener("click",closeModal);
+}
+
+/* ---- "Add to home screen" prompt banner (browser only, never in the app) ----
+   Shown when Evolve is opened in a normal browser tab, NOT when it's already
+   running as the installed PWA (isStandalone). Android gets a real one-tap
+   Install when Chrome offers the prompt; iPhone gets the manual Safari steps
+   (iOS has no programmatic install). Dismiss hides it for this visit; it
+   returns next browser visit until the app is installed (once installed, the
+   app launches standalone and this never shows again). */
+let installBannerDismissed=false;
+function isiOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1); }
+function showInstallBanner(){
+  if(isStandalone()) return;            /* already installed & launched from icon */
+  if(installBannerDismissed) return;    /* dismissed earlier this visit */
+  if($("#installBanner")) return;       /* already showing */
+  const ios=isiOS();
+  const bar=el("div","install-banner"); bar.id="installBanner";
+  const action = (!ios && deferredInstall)
+    ? `<button class="btn str sm" id="inst_now">Install</button>`
+    : `<button class="btn str sm" id="inst_how">How</button>`;
+  bar.innerHTML=`<span>📲 Add Evolve to your home screen for the full‑screen, offline app.</span>
+    ${action}
+    <button class="upd-x" id="inst_x" title="Not now">✕</button>`;
+  document.body.appendChild(bar);
+  const dismiss=()=>{ installBannerDismissed=true; bar.remove(); };
+  $("#inst_x").addEventListener("click",dismiss);
+  if($("#inst_now")) $("#inst_now").addEventListener("click",async ()=>{
+    $("#inst_now").textContent="…"; $("#inst_now").disabled=true;
+    await tryInstall();                 /* fires Chrome's prompt; appinstalled removes banner */
+    if($("#installBanner")) bar.remove();
+  });
+  if($("#inst_how")) $("#inst_how").addEventListener("click",()=>{ dismiss(); tryInstall(); });
 }
 /* ===================== APP UPDATES (in-app, no more close-twice dance) ===================== */
 let swReg=null, swRefreshing=false;
@@ -5560,6 +5605,10 @@ if("serviceWorker" in navigator){
   /* check again whenever the app is brought back to the foreground */
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkForUpdate(false); });
 }
+
+/* offer "add to home screen" shortly after load — only in a browser, never in
+   the installed app. Delayed a touch so it doesn't fight the splash/first paint. */
+window.addEventListener("load",()=>{ if(!isStandalone()) setTimeout(showInstallBanner,2600); });
 
 /* keep number inputs from zooming weirdly handled by viewport; ready. */
 
