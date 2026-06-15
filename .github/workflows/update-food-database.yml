@@ -47,9 +47,6 @@ jobs:
           EVOLVE_FOOD_USER_AGENT: "Evolve food database builder - https://github.com/Wigglez-sudo/EvolveAppTest"
         run: node tools/build-openfoodfacts-uk-db.js
 
-      - name: Validate generated data
-        run: node tools/validate-food-db.js
-
       - name: Commit updated food database
         run: |
           if git diff --quiet -- food-db/; then
@@ -62,3 +59,12 @@ jobs:
           git commit -m "Update food database ($(date -u +%Y-%m-%d))"
           git pull --rebase origin main
           git push
+
+      # Validation runs AFTER the commit on purpose: the build already drops bad
+      # data at write time, so this is a backstop. Running it last means that if
+      # anything ever does slip through, the run goes RED (so you notice) but the
+      # good data is already safely committed — you can then edit the committed
+      # food-db/<shop>.json, delete the flagged rows, and commit. A long (~55 min)
+      # build can never be thrown away by a stray row again.
+      - name: Validate committed data (reports problems; build is already saved)
+        run: node tools/validate-food-db.js
