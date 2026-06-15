@@ -3639,9 +3639,11 @@ function renderFuel(){
 }
 
 let foodCat="All";
+let foodShop="all"; /* food pack shop filter: "all" or a shop id */
 function allFoods(){
   const custom=(DATA.customFoods||[]).map(c=>[c.name,c.kcal,c.p,c.c,c.f,"My foods",c.cat||""]);
-  return custom.concat(FOODS);
+  let packs=[]; try{ if(window.FoodPacks) packs=FoodPacks.packFoods()||[]; }catch(e){}
+  return custom.concat(FOODS).concat(packs);
 }
 function foodPortionFor(name){
   if(!name)return null;
@@ -3711,7 +3713,7 @@ function addToPlate(name,grams){
   toast(name+" → plate");
 }
 function openFoodSearch(presetMeal){
-  plate=[]; foodCat="All"; catsOpen=false;
+  plate=[]; foodCat="All"; foodShop="all"; catsOpen=false;
   plateMeal=presetMeal||suggestMeal();
   const base=Array.from(new Set(FOODS.map(f=>f[5])));
   const hasFav=(DATA.favFoods&&DATA.favFoods.length);
@@ -3727,6 +3729,7 @@ function openFoodSearch(presetMeal){
         <button class="chip sm" id="fs_catsT">▾ Categories</button>
       </div>
       <div id="fs_cats" class="lg-cats" style="display:none">${cats.map(c=>`<button class="chip sm ${c==="All"?"on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      ${(function(){ try{ const ip=(window.FoodPacks?FoodPacks.installedPacks():[]); if(!ip.length)return ""; return `<div id="fs_shops" class="lg-cats" style="display:flex;margin-top:6px"><button class="chip sm on" data-shop="all">All shops</button>${ip.map(p=>`<button class="chip sm" data-shop="${esc(p.id)}">🛒 ${esc(p.name)}</button>`).join("")}</div>`; }catch(e){return "";} })()}
     </div>
     <div class="lg-scroll">
       <div id="fs_recent"></div>
@@ -3749,6 +3752,7 @@ function openFoodSearch(presetMeal){
     let pool=allFoods();
     if(foodCat==="★ Favourites") pool=pool.filter(f=>isFavFood(f[0]));
     else if(foodCat!=="All"&&foodCat!=="★ Favourites") pool=pool.filter(f=>f[5]===foodCat || (f[6]&&f[6]===foodCat));
+    if(foodShop!=="all") pool=pool.filter(f=>f[6]===foodShop); /* shop pack filter */
     const list=raw
       ? pool.map(f=>({f,score:foodSearchScore(f[0],raw)})).filter(x=>x.score<999)
           .sort((a,b)=>a.score-b.score || a.f[0].localeCompare(b.f[0])).slice(0,150).map(x=>x.f)
@@ -3781,6 +3785,8 @@ function openFoodSearch(presetMeal){
   $("#lg_meal").querySelectorAll("[data-m]").forEach(b=>b.addEventListener("click",()=>{ plateMeal=b.dataset.m; $("#lg_meal").querySelectorAll("[data-m]").forEach(x=>x.classList.remove("on")); b.classList.add("on"); paintPlate(); }));
   $("#fs_cats").querySelectorAll("[data-c]").forEach(b=>b.addEventListener("click",()=>{
     $("#fs_cats").querySelectorAll("[data-c]").forEach(x=>x.classList.remove("on"));b.classList.add("on");foodCat=b.dataset.c;paintRecent();paintList();}));
+  const shopRow=$("#fs_shops"); if(shopRow){ shopRow.querySelectorAll("[data-shop]").forEach(b=>b.addEventListener("click",()=>{
+    shopRow.querySelectorAll("[data-shop]").forEach(x=>x.classList.remove("on")); b.classList.add("on"); foodShop=b.dataset.shop; paintRecent(); paintList(); })); }
   paintRecent(); paintList(); paintPlate();
 }
 
@@ -5079,6 +5085,82 @@ function renderMore(){
   }
 
   /* ---- BACKUP & RESTORE ---- */
+  function buildFoodPacks(body){
+    body.appendChild(el("p","tiny muted","Add big UK supermarket food databases to your search. Pick your shops below and download only those — they're stored on your device and work offline once downloaded. Foods appear inside the normal categories (Cheese, Dairy, etc.) with the shop's name."));
+    body.lastChild.style.margin="0 0 6px";
+    const priv=el("p","tiny muted","🔒 Food packs are public lists downloaded from GitHub. Your personal data is never uploaded.");
+    priv.style.cssText="margin:0 0 14px;opacity:.8";
+    body.appendChild(priv);
+
+    const list=el("div","fp-list"); body.appendChild(list);
+    const status=el("div","tiny muted"); status.style.margin="10px 2px"; body.appendChild(status);
+
+    function sizeStr(bytes){ if(!bytes)return ""; const mb=bytes/1048576; return mb>=1?mb.toFixed(1)+" MB":Math.max(1,Math.round(bytes/1024))+" KB"; }
+
+    function renderRow(shop, installed){
+      const row=el("div","fp-row");
+      const meta=`${shop.count?shop.count.toLocaleString()+" foods":""}${shop.bytes?` · ${sizeStr(shop.bytes)}`:""}`;
+      row.innerHTML=`<div class="fp-main"><div class="fp-name">🛒 ${esc(shop.name||shop.id)}</div>
+        <div class="fp-sub">${installed?`Installed${installed.count?` · ${installed.count.toLocaleString()} foods`:""}`:esc(meta||"Tap download to add")}</div></div>`;
+      const act=el("div","fp-act");
+      if(installed){
+        const rm=el("button","btn ghost sm","Remove");
+        rm.addEventListener("click",()=>{
+          rm.disabled=true; rm.textContent="Removing…";
+          FoodPacks.removePack(shop.id).then(()=>{ toast(`${shop.name} removed`); refresh(); try{if(typeof paintList==="function"&&document.getElementById("fs_list"))paintList();}catch(e){} })
+            .catch(()=>{ rm.disabled=false; rm.textContent="Remove"; toast("Couldn't remove"); });
+        });
+        act.appendChild(rm);
+        /* offer update if manifest version differs from installed */
+        if(shop.version && installed.version && shop.version!==installed.version){
+          const up=el("button","btn fuel sm","Update"); up.style.marginLeft="6px";
+          up.addEventListener("click",()=>doDownload(shop,up,"Updating…"));
+          act.appendChild(up);
+        }
+      } else {
+        const dl=el("button","btn fuel sm","Download");
+        dl.addEventListener("click",()=>doDownload(shop,dl,"Downloading…"));
+        act.appendChild(dl);
+      }
+      row.appendChild(act);
+      return row;
+    }
+
+    function doDownload(shop,btn,busyText){
+      if(!navigator.onLine){ toast("You're offline — connect to download"); return; }
+      btn.disabled=true; const old=btn.textContent; btn.textContent=busyText;
+      FoodPacks.downloadPack(shop).then(()=>{
+        toast(`${shop.name} added ✓`); refresh();
+        try{ if(typeof paintList==="function"&&document.getElementById("fs_list")) paintList(); }catch(e){}
+      }).catch(()=>{ btn.disabled=false; btn.textContent=old; toast("Download failed — try again"); });
+    }
+
+    function refresh(){
+      list.innerHTML=""; status.textContent="Loading available packs…";
+      FoodPacks.loadManifest().then(m=>{
+        status.textContent="";
+        const installedIds=FoodPacks.installedShopIds();
+        const installedMap={}; FoodPacks.installedPacks().forEach(p=>installedMap[p.id]=p);
+        if(!m.shops.length){ status.textContent="No food packs available yet."; }
+        m.shops.forEach(shop=>list.appendChild(renderRow(shop, installedMap[shop.id])));
+        /* show any installed packs no longer in the manifest, so they can still be removed */
+        installedIds.forEach(id=>{ if(!m.shops.some(s=>s.id===id)){ const p=installedMap[id]; list.appendChild(renderRow({id:id,name:p.name,count:p.count,bytes:p.bytes}, p)); } });
+        if(m.version) { const v=el("div","tiny muted"); v.style.margin="8px 2px"; v.textContent="Database version: "+m.version; body.appendChild(v); }
+      }).catch(()=>{
+        status.textContent="";
+        const installed=FoodPacks.installedPacks();
+        if(installed.length){
+          installed.forEach(p=>list.appendChild(renderRow({id:p.id,name:p.name,count:p.count,bytes:p.bytes}, p)));
+          const note=el("div","tiny muted"); note.style.margin="8px 2px"; note.textContent="Couldn't reach the food pack list right now. Your installed packs still work offline.";
+          body.appendChild(note);
+        } else {
+          status.innerHTML=`No food packs available yet.<br>Once the food database has been published, your shops will appear here to download.`;
+        }
+      });
+    }
+    refresh();
+  }
+
   function buildBackup(body){
     const last=DATA.meta.lastBackup?prettyDate(DATA.meta.lastBackup):"Never";
     body.appendChild(el("p","tiny muted","Evolve is local-first by default. For cloud safety, create an encrypted backup file first, then use your phone's own Save/Share sheet to choose where it goes. Evolve does not upload it automatically and does not know where you store it." )).style.margin="0 0 12px";
@@ -5172,12 +5254,14 @@ function renderMore(){
   made.prefs=moreAcc("prefs","⚙️","Preferences","Theme, timers, water, units & more",buildPrefs,false,{iconClass:"ic-prefs"});
   made.stats=moreAcc("stats","📊","Stats & resets","Reset or adjust your tracked numbers",buildStatsResets,false,{iconClass:"ic-stats"});
   made.backup=moreAcc("backup","💾","Backup & restore","Export or import your data as a code",buildBackup,false,{iconClass:"ic-backup"});
+  made.foodpacks=moreAcc("foodpacks","🛒","Food packs","Add UK supermarket foods (optional download)",buildFoodPacks,false,{iconClass:"ic-backup"});
   made.help=moreAcc("help","📖","Help & guide","How every part of Evolve works",buildHelp,false,{iconClass:"ic-help"});
   made.danger=moreAcc("danger","⚠️","Danger zone","Erase all data — handle with care",buildDanger,true);
 
   const groups=[
     ["You",            ["profile","units","prefs"]],
     ["Your data",      ["stats","backup"]],
+    ["Food",           ["foodpacks"]],
     ["About",          ["help"]]
   ];
   groups.forEach(([label,ids])=>{
@@ -5471,3 +5555,16 @@ if("serviceWorker" in navigator){
 }
 
 /* keep number inputs from zooming weirdly handled by viewport; ready. */
+
+/* boot the optional food packs (installed shop databases) so search includes
+   them right away. Safe no-op if the module or IndexedDB isn't available. */
+(function(){
+  try{
+    if(window.FoodPacks && FoodPacks.init){
+      FoodPacks.init().then(function(){
+        /* if the user is already on Fuel with the search open, refresh the list */
+        try{ if(typeof paintList==="function" && document.getElementById("fs_list")) paintList(); }catch(e){}
+      }).catch(function(){});
+    }
+  }catch(e){}
+})();

@@ -1,7 +1,7 @@
 /* Evolve service worker — v3.31 (network-first with offline fallback + in-app update flow).
    Bump CACHE whenever you change ANY of the shell files so old caches are cleared. */
-const CACHE = "evolve-v3-53";
-const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon.png"];
+const CACHE = "evolve-v3-54";
+const SHELL = ["./", "./index.html", "./styles.css", "./data.js", "./food-packs.js", "./app.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./favicon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
