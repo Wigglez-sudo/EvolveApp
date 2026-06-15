@@ -110,11 +110,13 @@ function cardioDistanceKm(name, seconds){
 const KEY="evolve_v1";
 const PROFILE_PHOTO_KEY="evolve_profile_photo_v1"; /* separate local-only photo; deliberately not included in backup codes */
 const PROGRESS_PHOTOS_KEY="evolve_progress_photos_v1"; /* v3.31: local-only progress gallery; never in backups */
+const COACH_KEY_KEY="evolve_coach_key_v1"; /* v3.31: OpenRouter API key — local-only, never in any backup, never sent anywhere except OpenRouter */
 const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
   prefs:{energy:"kcal", addExercise:true, showAchievements:true, showHelpBars:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
-    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"modern"},
+    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"modern",
+    coachConsent:false, coachModel:"deepseek/deepseek-chat-v3-0324:free"},
   customFoods:[], /* {name,kcal,p,c,f} per 100g, user-added */
   favFoods:[],  /* GLOBAL favourite food names */
   favMachines:[], /* legacy machine names (migrated into favExercises) */
@@ -146,6 +148,8 @@ function migrate(d){
   /* v3.22 — new preference defaults (kept here so existing users carry over untouched) */
   if(!(Number(d.prefs.restDefault)>0)) d.prefs.restDefault=90;       /* default rest-timer length (seconds) */
   if(!d.prefs.headingFont) d.prefs.headingFont="modern";             /* v3.31: heading font style */
+  if(typeof d.prefs.coachConsent!=="boolean") d.prefs.coachConsent=false; /* v3.31: AI Coach privacy consent */
+  if(!d.prefs.coachModel) d.prefs.coachModel="deepseek/deepseek-chat-v3-0324:free";
   if(typeof d.prefs.restBeep!=="boolean") d.prefs.restBeep=true;     /* beep when rest ends */
   if(typeof d.prefs.restFlash!=="boolean") d.prefs.restFlash=true;   /* screen flash when rest ends */
   if(typeof d.prefs.keepAwake!=="boolean") d.prefs.keepAwake=true;   /* keep screen awake during use */
@@ -713,6 +717,7 @@ function switchTab(tab){
   if(tab==="fuel")renderFuel();
   if(tab==="stats")renderStats();
   if(tab==="more")renderMore();
+  if(tab==="coach")renderCoach();
   const fab=$("#fuelFab"); if(fab) fab.classList.toggle("hidden",tab!=="fuel");
 }
 document.querySelectorAll("#nav button").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
@@ -926,7 +931,16 @@ const TAB_HELP={
     <div class="help-row"><b>Stats &amp; resets</b><span>Reset a tracked number to zero or a custom value (unlock first).</span></div>
     <div class="help-row"><b>Backup &amp; restore</b><span><b>Encrypted backup</b> — locks your data with a password, then opens your phone's Save/Share sheet (iCloud, Files, Drive, etc.); restore with the same password. <b>Backup reminders</b> (Off→Monthly) with optional notifications. <b>CSV export</b> of workouts or food for your own records.</span></div>
     <div class="help-row"><b>Help &amp; guide</b><span>This help, the full guide, and the changelog.</span></div>
-    <div class="help-row"><b>Danger zone</b><span>Erase everything on this device — two-step, can't be undone.</span></div></div>`}
+    <div class="help-row"><b>Danger zone</b><span>Erase everything on this device — two-step, can't be undone.</span></div></div>`},
+  coach:{t:"AI Coach",b:`<div class="help-body">
+    <p class="help-lead">An optional AI coach for training &amp; nutrition, powered by your own OpenRouter key.</p>
+    <div class="help-row"><b>⚠️ Sends data off device</b><span>This is the only part of Evolve that isn't fully on-device. When you ask something, your question + a summary of your training is sent to OpenRouter to generate a reply. You consent before it's enabled.</span></div>
+    <div class="help-row"><b>Your key</b><span>Create a free key at openrouter.ai/keys and paste it in. It's stored only on this device, never in any backup, and never sent anywhere except OpenRouter.</span></div>
+    <div class="help-row"><b>Chat</b><span>Ask anything about your training or nutrition; the coach sees your recent workouts and goals.</span></div>
+    <div class="help-row"><b>Generate a workout</b><span>Builds a session from your goal, equipment and recent training.</span></div>
+    <div class="help-row"><b>Analyse my logs</b><span>Reviews your recent workouts &amp; targets and suggests improvements.</span></div>
+    <div class="help-row"><b>Models</b><span>Pick from free or paid models in Coach settings. Free ones cost nothing; paid ones use your OpenRouter credit.</span></div>
+    <div class="help-row"><b>Not medical advice</b><span>The coach can be wrong — see a professional for pain, injury or medical concerns.</span></div></div>`}
 };
 function openTabHelp(k){ const h=TAB_HELP[k]; if(!h)return;
   openModal(`<h3>${h.t} — how it works</h3><div style="max-height:62vh;overflow:auto;margin-top:6px">${h.b}</div>
@@ -1794,6 +1808,183 @@ function openRoutineDayExercises(dayIdx){
     paintList();
   }
   paint();
+}
+
+/* ===================== AI COACH (OpenRouter, user's own key) — v3.31 =====================
+   Privacy: the API key lives ONLY in localStorage on this device (COACH_KEY_KEY),
+   is never written to any backup (encrypted or CSV) and is never sent anywhere except
+   OpenRouter. A summary of the user's training/nutrition is sent to OpenRouter ONLY when
+   the user actively asks the Coach something, and only after they've given consent. */
+const COACH_MODELS=[
+  {id:"deepseek/deepseek-chat-v3-0324:free", name:"DeepSeek V3 (free)"},
+  {id:"meta-llama/llama-3.3-70b-instruct:free", name:"Llama 3.3 70B (free)"},
+  {id:"google/gemini-2.0-flash-exp:free", name:"Gemini 2.0 Flash (free)"},
+  {id:"openai/gpt-4o-mini", name:"GPT-4o mini (paid)"},
+  {id:"anthropic/claude-3.5-haiku", name:"Claude 3.5 Haiku (paid)"}
+];
+function getCoachKey(){ try{return localStorage.getItem(COACH_KEY_KEY)||"";}catch(e){return "";} }
+function setCoachKey(k){ try{ if(k)localStorage.setItem(COACH_KEY_KEY,k); else localStorage.removeItem(COACH_KEY_KEY); return true;}catch(e){return false;} }
+function coachReady(){ return DATA.prefs.coachConsent===true && !!getCoachKey(); }
+
+/* build a compact, on-device summary of the user's training to give the model context */
+function coachContext(){
+  const p=DATA.profile||{}, t=DATA.targets||{};
+  const lines=[];
+  lines.push(`Profile: ${p.sex||"?"}, age ${p.age||"?"}, ${p.heightCm||"?"}cm, ${p.weightKg||"?"}kg. Goal: ${p.goal||"maintain"}. Activity: ${p.activity||"mod"}.`);
+  if(t.calories) lines.push(`Daily targets: ${t.calories} kcal, ${t.protein||"?"}g protein, ${t.carbs||"?"}g carbs, ${t.fat||"?"}g fat.`);
+  lines.push(`Training environment: ${DATA.prefs.env==="home"?"home":"gym"} (${DATA.prefs.gymEquip==="all"?"free weights + machines":"machines + cardio"}).`);
+  const ws=(DATA.workouts||[]).slice(-6).reverse();
+  if(ws.length){
+    lines.push("Recent workouts (most recent first):");
+    ws.forEach(w=>{
+      const exs=(w.exercises||[]).filter(e=>!e.activity).map(e=>{
+        const top=(e.sets||[]).filter(s=>s.done&&s.kg).sort((a,b)=>b.kg-a.kg)[0];
+        return top?`${e.name} ${liftStr(top.kg)}×${top.reps}`:e.name;
+      });
+      lines.push(`- ${w.date} ${w.title||"Workout"}: ${exs.join(", ")||"(no sets)"}`);
+    });
+  } else lines.push("No workouts logged yet.");
+  const routines=(DATA.routines||[]);
+  if(routines.length) lines.push(`Saved programs: ${routines.map(r=>r.name+" ("+(r.days||[]).length+" days)").join("; ")}.`);
+  return lines.join("\n");
+}
+
+async function coachAsk(messages){
+  const key=getCoachKey(); if(!key) throw new Error("No API key set");
+  const res=await fetch("https://openrouter.ai/api/v1/chat/completions",{
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+key, "Content-Type":"application/json",
+      "HTTP-Referer":"https://wigglez-sudo.github.io/", "X-Title":"Evolve" },
+    body:JSON.stringify({ model:DATA.prefs.coachModel||"deepseek/deepseek-chat-v3-0324:free", messages })
+  });
+  if(!res.ok){
+    let msg="Request failed ("+res.status+")";
+    try{ const e=await res.json(); if(e.error&&e.error.message)msg=e.error.message; }catch(_){}
+    if(res.status===401) msg="Invalid API key — check it in Coach settings.";
+    if(res.status===402) msg="This model needs credit on your OpenRouter account, or pick a free model.";
+    if(res.status===429) msg="Rate limited — wait a moment, or try a different model.";
+    throw new Error(msg);
+  }
+  const data=await res.json();
+  return (data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content)||"(no response)";
+}
+
+const COACH_SYSTEM="You are a concise, practical strength & nutrition coach inside a private fitness app called Evolve. Give specific, actionable advice using the user's data when relevant. Keep responses focused and not too long. You are not a medical professional; suggest seeing a doctor for pain, injury or medical concerns.";
+
+/* ---- consent gate: shown before the Coach can be used ---- */
+function openCoachConsent(onAgree){
+  openModal(`<h3>Before you use AI Coach</h3>
+    <div class="coach-privacy">
+      <p><b>This is the one part of Evolve that sends data off your device.</b></p>
+      <p>When you ask the Coach something, Evolve sends your <b>question</b> and a <b>summary of your training</b> (profile, goals, recent workouts, programs) to <b>OpenRouter</b>, the AI provider, to generate a reply.</p>
+      <ul class="coach-priv-list">
+        <li>Your <b>API key is stored only on this device</b> — never in any backup (encrypted or CSV), and never sent anywhere except OpenRouter.</li>
+        <li>Evolve has <b>no server</b> — requests go straight from your phone to OpenRouter. We never see your data or your key.</li>
+        <li>OpenRouter and the model provider you choose process what you send under <b>their</b> privacy policies — review them at openrouter.ai.</li>
+        <li>Don't include anything you wouldn't want a third-party AI service to process.</li>
+        <li>The Coach can be wrong. It is not medical advice.</li>
+      </ul>
+      <p class="tiny muted">You can revoke consent and delete your key any time in the Coach tab.</p>
+    </div>
+    <button class="btn str block" id="coach_agree">I understand — enable AI Coach</button>
+    <button class="btn ghost block" id="coach_decline" style="margin-top:10px">Not now</button>`);
+  $("#coach_agree").addEventListener("click",()=>{ DATA.prefs.coachConsent=true; save(); closeModal(); if(onAgree)onAgree(); });
+  $("#coach_decline").addEventListener("click",()=>closeModal());
+}
+function openCoachKeySetup(onDone){
+  openModal(`<h3>Connect OpenRouter</h3>
+    <p class="muted tiny" style="line-height:1.5;margin-bottom:12px">The Coach uses <b>OpenRouter</b>, which gives access to many AI models with one key — including free ones. Create a free key at <b>openrouter.ai/keys</b>, then paste it below. It's stored only on this device.</p>
+    <div class="field"><label>OpenRouter API key</label><input class="input" id="coach_key" type="password" placeholder="sk-or-..." value="${esc(getCoachKey())}" autocomplete="off"></div>
+    <div class="field"><label>Model</label><select class="input" id="coach_model">${COACH_MODELS.map(m=>`<option value="${esc(m.id)}" ${DATA.prefs.coachModel===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></div>
+    <button class="btn str block" id="coach_savekey">Save</button>
+    ${getCoachKey()?`<button class="btn ghost block" id="coach_delkey" style="margin-top:10px">Delete key from this device</button>`:""}`);
+  $("#coach_savekey").addEventListener("click",()=>{
+    const k=$("#coach_key").value.trim(); DATA.prefs.coachModel=$("#coach_model").value; save();
+    if(!setCoachKey(k)){toast("Couldn't save key");return;}
+    closeModal(); toast(k?"Coach connected":"Key cleared"); if(onDone)onDone();
+  });
+  const del=$("#coach_delkey"); if(del)del.addEventListener("click",()=>{ setCoachKey(""); closeModal(); toast("Key deleted"); if(onDone)onDone(); });
+}
+
+/* ---- the Coach tab ---- */
+let coachChat=[]; /* {role, content} visible conversation (excludes system) */
+function renderCoach(){
+  const b=$("#coachBody"); if(!b)return; b.innerHTML="";
+  b.appendChild(helpBar("coach"));
+
+  if(!DATA.prefs.coachConsent){
+    const intro=el("div","v04-card");
+    intro.innerHTML=`<div class="disp" style="font-size:22px;margin-bottom:6px">🤖 AI Coach</div>
+      <p class="muted" style="line-height:1.5;font-size:14px">Ask an AI coach about your training and nutrition, generate workouts, or get your recent logs analysed — using your own free OpenRouter key.</p>
+      <p class="tiny muted" style="line-height:1.5;margin-top:10px">This is the only feature that sends data off your device. You'll see exactly what's shared before enabling it.</p>`;
+    const go=el("button","btn str block","Learn more & enable"); go.style.marginTop="12px";
+    go.addEventListener("click",()=>openCoachConsent(renderCoach));
+    b.append(intro,go); return;
+  }
+  if(!getCoachKey()){
+    const card=el("div","v04-card");
+    card.innerHTML=`<div class="disp" style="font-size:20px;margin-bottom:6px">Connect OpenRouter</div>
+      <p class="muted" style="font-size:14px;line-height:1.5">Add your free OpenRouter API key to start. It stays on this device.</p>`;
+    const go=el("button","btn str block","Add API key"); go.style.marginTop="12px";
+    go.addEventListener("click",()=>openCoachKeySetup(renderCoach));
+    b.append(card,go); return;
+  }
+
+  /* action buttons */
+  const acts=el("div","coach-acts");
+  const aGen=el("button","btn fuel","🏋️ Generate a workout");
+  const aAnalyse=el("button","btn","📊 Analyse my recent logs");
+  aGen.addEventListener("click",()=>coachAction("generate"));
+  aAnalyse.addEventListener("click",()=>coachAction("analyse"));
+  acts.append(aGen,aAnalyse); b.appendChild(acts);
+
+  /* conversation */
+  const log=el("div","coach-log"); log.id="coachLog";
+  if(!coachChat.length){
+    log.innerHTML=`<div class="coach-empty muted">Ask anything about your training or nutrition — e.g. "how do I bring up my shoulders?" or "is my protein high enough?"</div>`;
+  } else {
+    log.innerHTML=coachChat.map(m=>`<div class="coach-msg ${m.role}"><div class="coach-bubble">${m.role==="assistant"?coachFormat(m.content):esc(m.content)}</div></div>`).join("");
+  }
+  b.appendChild(log);
+
+  /* input row */
+  const inRow=el("div","coach-input");
+  inRow.innerHTML=`<input class="input" id="coach_q" placeholder="Ask your coach…" autocomplete="off"><button class="btn str" id="coach_send">Send</button>`;
+  b.appendChild(inRow);
+
+  /* footer: privacy + settings */
+  const foot=el("div","coach-foot");
+  foot.innerHTML=`<span class="tiny muted">🔒 Sends your data to OpenRouter when you ask. Key stays on device.</span>`;
+  const set=el("button","linklike tiny","Coach settings"); set.addEventListener("click",()=>openCoachKeySetup(renderCoach));
+  foot.appendChild(set); b.appendChild(foot);
+
+  const send=()=>{ const q=$("#coach_q").value.trim(); if(!q)return; $("#coach_q").value=""; coachSend(q); };
+  $("#coach_send").addEventListener("click",send);
+  $("#coach_q").addEventListener("keydown",e=>{ if(e.key==="Enter")send(); });
+  const lg=$("#coachLog"); if(lg)lg.scrollTop=lg.scrollHeight;
+}
+function coachFormat(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\n/g,"<br>"); }
+function coachBusy(on){ const s=$("#coach_send"); if(s){s.disabled=on;s.textContent=on?"…":"Send";} }
+
+async function coachSend(q){
+  coachChat.push({role:"user",content:q});
+  coachChat.push({role:"assistant",content:"…thinking"});
+  renderCoach(); coachBusy(true);
+  try{
+    const msgs=[{role:"system",content:COACH_SYSTEM+"\n\nUser's training data:\n"+coachContext()},
+      ...coachChat.filter(m=>m.content!=="…thinking")];
+    const reply=await coachAsk(msgs);
+    coachChat[coachChat.length-1]={role:"assistant",content:reply};
+  }catch(e){
+    coachChat[coachChat.length-1]={role:"assistant",content:"⚠️ "+(e.message||"Something went wrong.")};
+  }
+  coachBusy(false); renderCoach();
+}
+async function coachAction(kind){
+  const prompt = kind==="generate"
+    ? "Generate a single workout session for me for today, based on my goal, equipment and recent training. List exercises with sets and rep ranges. Keep it practical."
+    : "Analyse my recent workouts and nutrition context. Point out 2-3 specific things going well and 2-3 things to improve, with concrete next steps.";
+  coachSend(prompt);
 }
 
 /* ===================== GROUP BUILDER ===================== */
@@ -4163,6 +4354,7 @@ const LAST_UPDATED="14 June 2026";
 const LATEST_NUM="3.31";
 const LATEST_TITLE="Routines, progress photos, CSV export & logger polish";
 const LATEST_ITEMS=[
+  "<b>AI Coach (optional)</b> — a new Coach tab. Connect your own free OpenRouter key to chat about training &amp; nutrition, generate workouts, or analyse your logs. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
   "<b>Choose your heading font</b> — Settings → Preferences now has Modern, Bold and Classic styles. Modern (clean and legible) is the new default.",
   "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap.",
   "<b>Progress photos</b> — a private photo timeline in Progress → Trends, stored only on this device and never uploaded or backed up.",
