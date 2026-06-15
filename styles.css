@@ -726,7 +726,7 @@ hr{border:none;border-top:1px solid var(--line);margin:16px 0}
 /* v3.31 — AI Coach */
 .coach-acts{display:flex;gap:8px;margin-bottom:14px}
 .coach-acts .btn{flex:1;font-size:13px;padding:12px 8px}
-.coach-log{display:flex;flex-direction:column;gap:10px;min-height:120px;margin-bottom:12px}
+.coach-log{display:flex;flex-direction:column;gap:10px;min-height:120px;max-height:48vh;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px;padding:2px}
 .coach-empty{text-align:center;padding:28px 14px;line-height:1.5;font-size:13.5px}
 .coach-msg{display:flex}
 .coach-msg.user{justify-content:flex-end}

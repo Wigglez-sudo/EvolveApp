@@ -116,7 +116,7 @@ const DEFAULT_DATA = {
   targets:null, /* {calories,protein,carbs,fat,water} */
   prefs:{energy:"kcal", addExercise:true, showAchievements:true, showHelpBars:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
     restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"modern",
-    coachConsent:false, coachModel:"deepseek/deepseek-chat-v3-0324:free"},
+    coachConsent:false, coachModel:"openrouter/free"},
   customFoods:[], /* {name,kcal,p,c,f} per 100g, user-added */
   favFoods:[],  /* GLOBAL favourite food names */
   favMachines:[], /* legacy machine names (migrated into favExercises) */
@@ -149,10 +149,10 @@ function migrate(d){
   if(!(Number(d.prefs.restDefault)>0)) d.prefs.restDefault=90;       /* default rest-timer length (seconds) */
   if(!d.prefs.headingFont) d.prefs.headingFont="modern";             /* v3.31: heading font style */
   if(typeof d.prefs.coachConsent!=="boolean") d.prefs.coachConsent=false; /* v3.31: AI Coach privacy consent */
-  if(!d.prefs.coachModel) d.prefs.coachModel="deepseek/deepseek-chat-v3-0324:free";
-  /* v3.31: retire model slugs that OpenRouter has dropped, so the Coach keeps working */
-  const DEAD_COACH_MODELS=["google/gemini-2.0-flash-exp:free","google/gemini-flash-1.5-exp:free"];
-  if(DEAD_COACH_MODELS.indexOf(d.prefs.coachModel)>=0) d.prefs.coachModel="deepseek/deepseek-chat-v3-0324:free";
+  if(!d.prefs.coachModel) d.prefs.coachModel="openrouter/free";
+  /* v3.31: retire model slugs OpenRouter has dropped, and move the old default to the free router */
+  const DEAD_COACH_MODELS=["google/gemini-2.0-flash-exp:free","google/gemini-flash-1.5-exp:free","deepseek/deepseek-chat-v3-0324:free"];
+  if(DEAD_COACH_MODELS.indexOf(d.prefs.coachModel)>=0) d.prefs.coachModel="openrouter/free";
   if(typeof d.prefs.restBeep!=="boolean") d.prefs.restBeep=true;     /* beep when rest ends */
   if(typeof d.prefs.restFlash!=="boolean") d.prefs.restFlash=true;   /* screen flash when rest ends */
   if(typeof d.prefs.keepAwake!=="boolean") d.prefs.keepAwake=true;   /* keep screen awake during use */
@@ -1819,11 +1819,12 @@ function openRoutineDayExercises(dayIdx){
    OpenRouter. A summary of the user's training/nutrition is sent to OpenRouter ONLY when
    the user actively asks the Coach something, and only after they've given consent. */
 const COACH_MODELS=[
-  {id:"deepseek/deepseek-chat-v3-0324:free", name:"DeepSeek V3 (free) — recommended"},
+  {id:"openrouter/free", name:"Free router — auto-picks a free model (recommended)"},
+  {id:"deepseek/deepseek-chat-v3-0324:free", name:"DeepSeek V3 (free)"},
   {id:"deepseek/deepseek-r1:free", name:"DeepSeek R1 (free)"},
   {id:"meta-llama/llama-3.3-70b-instruct:free", name:"Llama 3.3 70B (free)"},
   {id:"google/gemma-3-27b-it:free", name:"Gemma 3 27B (free)"},
-  {id:"openrouter/auto", name:"Auto — always works (uses a little credit)"},
+  {id:"openrouter/auto", name:"Auto — best model (uses a little credit)"},
   {id:"openai/gpt-4o-mini", name:"GPT-4o mini (paid)"},
   {id:"anthropic/claude-3.5-haiku", name:"Claude 3.5 Haiku (paid)"}
 ];
@@ -1836,11 +1837,15 @@ async function fetchCoachModels(){
     const data=await res.json();
     const free=(data.data||[]).filter(m=>{
       const pr=m.pricing||{}; return (+pr.prompt===0 && +pr.completion===0);
-    }).map(m=>({id:m.id, name:(m.name||m.id)+" (free)"}));
-    /* free list first, then auto + paid staples */
+    }).map(m=>{ let nm=m.name||m.id; if(!/\(free\)\s*$/i.test(nm)) nm+=" (free)"; return {id:m.id, name:nm}; });
+    /* drop entries we add ourselves so they don't appear twice */
+    const STAPLES=["openrouter/free","openrouter/auto","openai/gpt-4o-mini","anthropic/claude-3.5-haiku"];
+    const freeClean=free.filter(m=>STAPLES.indexOf(m.id)<0);
+    /* free router first, then the live free list, then auto + paid staples */
     coachLiveModels=[
-      ...free.sort((a,b)=>a.name.localeCompare(b.name)),
-      {id:"openrouter/auto", name:"Auto — always works (uses a little credit)"},
+      {id:"openrouter/free", name:"Free router — auto-picks a free model (recommended)"},
+      ...freeClean.sort((a,b)=>a.name.localeCompare(b.name)),
+      {id:"openrouter/auto", name:"Auto — best model (uses a little credit)"},
       {id:"openai/gpt-4o-mini", name:"GPT-4o mini (paid)"},
       {id:"anthropic/claude-3.5-haiku", name:"Claude 3.5 Haiku (paid)"}
     ];
@@ -2006,7 +2011,7 @@ function renderCoach(){
   const send=()=>{ const q=$("#coach_q").value.trim(); if(!q)return; $("#coach_q").value=""; coachSend(q); };
   $("#coach_send").addEventListener("click",send);
   $("#coach_q").addEventListener("keydown",e=>{ if(e.key==="Enter")send(); });
-  const lg=$("#coachLog"); if(lg)lg.scrollTop=lg.scrollHeight;
+  const lg=$("#coachLog"); if(lg){ const toBottom=()=>{ lg.scrollTop=lg.scrollHeight; }; requestAnimationFrame(toBottom); setTimeout(toBottom,60); }
 }
 function coachFormat(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\n/g,"<br>"); }
 function coachBusy(on){ const s=$("#coach_send"); if(s){s.disabled=on;s.textContent=on?"…":"Send";} }
