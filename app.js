@@ -114,7 +114,7 @@ const DEFAULT_DATA = {
   profile:null, /* {name,sex,age,heightCm,weightKg,activity,goal,goalWeightKg} */
   targets:null, /* {calories,protein,carbs,fat,water} */
   prefs:{energy:"kcal", addExercise:true, showAchievements:true, showHelpBars:true, liftUnit:"kg", bodyUnit:"kg", gymEquip:"machine_cardio", env:"gym", rmFormula:"epley", theme:"ember", mealTimes:false, targetMode:"auto",
-    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home"},
+    restDefault:90, restBeep:true, restFlash:true, keepAwake:true, waterUnit:"ml", waterStep:250, startTab:"home", headingFont:"modern"},
   customFoods:[], /* {name,kcal,p,c,f} per 100g, user-added */
   favFoods:[],  /* GLOBAL favourite food names */
   favMachines:[], /* legacy machine names (migrated into favExercises) */
@@ -128,7 +128,7 @@ const DEFAULT_DATA = {
   weights:[],   /* {date,kg} */
   ach:{workoutsDone:0,totalVolume:0,streak:0,bestStreak:0,lastWorkoutDate:null,prs:{},unlocked:[]},
   statResets:{}, /* per-stat user resets: key -> {start, since} (prs: {since}) */
-  meta:{lastBackup:null, created:null, backupReminder:"weekly", backupNotifications:false, backupNotifyLast:null}
+  meta:{lastBackup:null, created:null, backupReminder:"weekly", backupNotifications:false, backupNotifyLast:null, driveEnabled:false, driveClientId:"", driveFileId:null, lastDriveBackup:null}
 };
 let DATA = load();
 function load(){
@@ -145,6 +145,7 @@ function migrate(d){
   if(d.prefs.targetMode!=="manual") d.prefs.targetMode="auto"; /* auto = formula targets; manual = user-set calories & macros */
   /* v3.22 — new preference defaults (kept here so existing users carry over untouched) */
   if(!(Number(d.prefs.restDefault)>0)) d.prefs.restDefault=90;       /* default rest-timer length (seconds) */
+  if(!d.prefs.headingFont) d.prefs.headingFont="modern";             /* v3.31: heading font style */
   if(typeof d.prefs.restBeep!=="boolean") d.prefs.restBeep=true;     /* beep when rest ends */
   if(typeof d.prefs.restFlash!=="boolean") d.prefs.restFlash=true;   /* screen flash when rest ends */
   if(typeof d.prefs.keepAwake!=="boolean") d.prefs.keepAwake=true;   /* keep screen awake during use */
@@ -159,14 +160,13 @@ function migrate(d){
   if(!d.meta || typeof d.meta!=="object") d.meta={};
   if(!["off","daily","weekly","biweekly","monthly"].includes(d.meta.backupReminder)) d.meta.backupReminder="weekly";
   if(typeof d.meta.backupNotifications!=="boolean") d.meta.backupNotifications=false;
-  /* Remove old v3.28 Google Drive OAuth metadata. Evolve now only creates local backup files and lets the user choose where to store them. */
-  delete d.meta.driveEnabled; delete d.meta.driveClientId; delete d.meta.driveFileId; delete d.meta.lastDriveBackup;
+  if(typeof d.meta.driveEnabled!=="boolean") d.meta.driveEnabled=false;
+  if(typeof d.meta.driveClientId!=="string") d.meta.driveClientId="";
+  if(typeof d.meta.driveFileId!=="string") d.meta.driveFileId=null;
+  if(typeof d.meta.lastDriveBackup!=="string") d.meta.lastDriveBackup=null;
 }
 
 function save(){try{localStorage.setItem(KEY,JSON.stringify(DATA));}catch(e){toast("Storage full or blocked");}}
-function clearEvolveStorage(){
-  [KEY,PROFILE_PHOTO_KEY,PROGRESS_PHOTOS_KEY,LIVE_KEY].forEach(k=>{ try{localStorage.removeItem(k);}catch(e){} });
-}
 
 /* ===================== THEMES ===================== */
 const THEMES={
@@ -205,6 +205,19 @@ function applyTheme(id){
   const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.setAttribute("content",_mix(THEME_BASE.ink,t.a,.045));
 }
 applyTheme((DATA.prefs&&DATA.prefs.theme)||"ember");
+
+/* v3.31 — heading font styles, switchable in Settings → Preferences */
+const HEADING_FONTS={
+  modern:{label:"Modern",   stack:'"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif', spacing:"-0.01em", sample:"Clean & legible"},
+  bold:  {label:"Bold",     stack:'"Archivo","Inter",sans-serif',                                          spacing:"-0.02em", sample:"Strong & sporty"},
+  classic:{label:"Classic", stack:'"Bebas Neue","Inter",sans-serif',                                        spacing:"0.02em",  sample:"Tall gym poster"}
+};
+function applyHeadingFont(id){
+  const f=HEADING_FONTS[id]||HEADING_FONTS.modern; const r=document.documentElement.style;
+  r.setProperty("--font-disp",f.stack);
+  r.setProperty("--font-disp-spacing",f.spacing);
+}
+applyHeadingFont((DATA.prefs&&DATA.prefs.headingFont)||"modern");
 
 /* ===================== DATE HELPERS (device clock) ===================== */
 function todayISO(d){d=d||new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
@@ -304,6 +317,28 @@ function checkBadges(){
 
 /* ===================== UI HELPERS ===================== */
 const $=s=>document.querySelector(s);
+
+/* v3.31 — prevent zoom (pinch + double-tap). iOS Safari ignores
+   user-scalable=no, so block its gesture events and rapid double-taps.
+   Scrolling, single taps and normal interactions are unaffected. */
+(function preventZoom(){
+  // Safari pinch-zoom gesture events
+  ["gesturestart","gesturechange","gestureend"].forEach(ev=>
+    document.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
+  // multi-touch pinch on touchmove
+  document.addEventListener("touchmove", e=>{ if(e.touches && e.touches.length>1) e.preventDefault(); }, {passive:false});
+  // double-tap zoom (two taps within 300ms at nearly the same spot)
+  let lastTouch=0, lastX=0, lastY=0;
+  document.addEventListener("touchend", e=>{
+    const now=Date.now();
+    const t=(e.changedTouches&&e.changedTouches[0])||null;
+    const x=t?t.clientX:0, y=t?t.clientY:0;
+    if(now-lastTouch<=300 && Math.abs(x-lastX)<40 && Math.abs(y-lastY)<40){ e.preventDefault(); }
+    lastTouch=now; lastX=x; lastY=y;
+  }, {passive:false});
+  // ctrl/⌘ + wheel zoom on desktop PWA
+  document.addEventListener("wheel", e=>{ if(e.ctrlKey) e.preventDefault(); }, {passive:false});
+})();
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
 function toast(msg){const t=$("#toast");t.classList.remove("has-undo");t.textContent=msg;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2200);}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -850,14 +885,15 @@ const TAB_HELP={
     <p class="help-lead">Your workout library — build a session, run a saved program, or pick a ready-made one.</p>
     <div class="help-row"><b>Gym / Home</b><span>Toggle where you're training; the exercise pool changes to match.</span></div>
     <div class="help-row"><b>Muscle tiles</b><span>Tap one to build a workout — set how many exercises, focus a sub-muscle, swap any, then Start.</span></div>
-    <div class="help-row"><b>📋 Programs</b><span>Build a multi-day routine (e.g. Push/Pull/Legs), then start any day with one tap. Open it to view, edit or start a day.</span></div>
+    <div class="help-row"><b>📋 Programs</b><span>Save a multi-day plan (e.g. Push/Pull/Legs). Start from a template or build your own, then start any day with one tap. (Favourites = one workout; Programs = a whole week.)</span></div>
     <div class="help-row"><b>Mega</b><span>Mixes several muscle groups in one session, with optional cardio.</span></div>
     <div class="help-row"><b>★ Saved workouts</b><span>Sessions you've saved as favourites — tap Start to run one again.</span></div>
     <div class="help-row"><b>Favourites ★</b><span>Star any exercise, then the ★ pill builds a session from your favourites.</span></div></div>`},
   cardio:{t:"Cardio",b:`<div class="help-body">
     <p class="help-lead">Track any cardio and log it to your day.</p>
-    <div class="help-row"><b>Activity tiles</b><span>Tap one to begin; each shows a rough calories &amp; distance estimate per 30 min.</span></div>
-    <div class="help-row"><b>Stopwatch / timer</b><span>Count up, or count down to a target time.</span></div>
+    <div class="help-row"><b>Activity tiles</b><span>Tap one to set it up; each shows a rough calories &amp; distance estimate per 30 min.</span></div>
+    <div class="help-row"><b>Ready, then Start</b><span>A fresh cardio opens on a Ready screen — the timer doesn't begin until you tap ▶ Start, so you can get set up first.</span></div>
+    <div class="help-row"><b>Stopwatch / timer</b><span>Counts up once started; Pause and Resume any time, then Finish to log it.</span></div>
     <div class="help-row"><b>Estimates</b><span>Calories burned, plus distance if you set your stride length in setup.</span></div>
     <div class="help-row"><b>Resume</b><span>Leave mid-session and it picks up where you left off.</span></div>
     <div class="help-row"><b>Back</b><span>Tap ‹ at the top to return to Train.</span></div></div>`},
@@ -1328,7 +1364,8 @@ function mkCardioCard(act, suggestMin){
 function openLiveCardioTimer(ex, onDone){
   if(liveCardioStop)liveCardioStop(); /* kill any timer left running from a sheet closed via ✕/Back */
   const act=ex.activity;
-  const st={elapsedMs:+ex.progressMs||0, running:true, lastTs:Date.now(), tick:null};
+  const fresh=(+ex.progressMs||0)===0; /* fresh start vs reopening mid-session */
+  const st={elapsedMs:+ex.progressMs||0, running:false, lastTs:Date.now(), tick:null};
   function saveProgress(){ ex.progressMs=st.elapsedMs; persistLive(); } /* keep elapsed time on the exercise so closing & reopening resumes instead of restarting from zero */
   function startTick(){ if(!st.tick)st.tick=setInterval(()=>{ if(st.running){const n=Date.now();st.elapsedMs+=n-st.lastTs;st.lastTs=n;ex.progressMs=st.elapsedMs;upd();} },250); }
   function stop(){ if(st.tick){clearInterval(st.tick);st.tick=null;} if(liveCardioStop===stop)liveCardioStop=null; saveProgress(); if(onDone)onDone(); }
@@ -1346,21 +1383,40 @@ function openLiveCardioTimer(ex, onDone){
     ex.done=true; ex.result={seconds:secs,kcal,dist:dist!=null?+dist.toFixed(2):null}; ex.progressMs=0;
     save(); persistLive(); closeModal(); toast("Cardio logged 🔥"); if(onDone)onDone();
   }
-  openModal(`<div class="center"><div style="font-size:40px">${act.ic}</div>
-    <div class="eyebrow" style="margin:6px 0 12px">${esc(act.name)}</div>
-    <div class="disp" id="lct_clock" style="font-size:64px;line-height:1">00:00</div>
-    <div class="num" id="lct_burn" style="color:var(--fuel);font-weight:700;margin-top:6px"></div>
-    <div class="row" style="gap:10px;margin-top:18px">
-      <button class="btn" id="lct_toggle" style="flex:1">Pause</button>
-      <button class="btn fuel" id="lct_done" style="flex:1">Finish</button></div>
-    <button class="btn ghost block" id="lct_cancel" style="margin-top:10px">Discard</button></div>`);
-  $("#lct_toggle").addEventListener("click",()=>{
-    st.running=!st.running; st.lastTs=Date.now(); if(st.running)startTick();
-    const t=$("#lct_toggle"); t.textContent=st.running?"Pause":"Resume"; t.className="btn"+(st.running?"":" str"); t.style.flex="1";
-  });
-  $("#lct_done").addEventListener("click",doFinish);
-  $("#lct_cancel").addEventListener("click",()=>{ st.elapsedMs=0; ex.progressMs=0; stop(); closeModal(); });
-  startTick(); upd();
+
+  /* ── READY screen (fresh start only) — nothing counts until the user taps Start ── */
+  function showReady(){
+    openModal(`<div class="center"><div style="font-size:46px;margin-bottom:4px">${act.ic}</div>
+      <div class="disp" style="font-size:28px;line-height:1.05">${esc(act.name)}</div>
+      <p class="muted" style="margin:10px 0 4px">Ready when you are.</p>
+      <p class="tiny muted" style="margin:0 0 22px">The timer won't start until you tap Start.</p>
+      <button class="btn fuel block" id="lct_start" style="font-size:18px;padding:16px">▶ Start</button>
+      <button class="btn ghost block" id="lct_back" style="margin-top:10px">Discard</button></div>`);
+    $("#lct_start").addEventListener("click",()=>{ st.running=true; st.lastTs=Date.now(); showTimer(); startTick(); upd(); });
+    $("#lct_back").addEventListener("click",()=>{ st.elapsedMs=0; ex.progressMs=0; stop(); closeModal(); });
+  }
+
+  /* ── RUNNING timer ── */
+  function showTimer(){
+    openModal(`<div class="center"><div style="font-size:40px">${act.ic}</div>
+      <div class="eyebrow" style="margin:6px 0 12px">${esc(act.name)}</div>
+      <div class="disp" id="lct_clock" style="font-size:64px;line-height:1">${fmtClock(st.elapsedMs)}</div>
+      <div class="num" id="lct_burn" style="color:var(--fuel);font-weight:700;margin-top:6px"></div>
+      <div class="row" style="gap:10px;margin-top:18px">
+        <button class="btn" id="lct_toggle" style="flex:1">${st.running?"Pause":"Resume"}</button>
+        <button class="btn fuel" id="lct_done" style="flex:1">Finish</button></div>
+      <button class="btn ghost block" id="lct_cancel" style="margin-top:10px">Discard</button></div>`);
+    $("#lct_toggle").addEventListener("click",()=>{
+      st.running=!st.running; st.lastTs=Date.now(); if(st.running)startTick();
+      const t=$("#lct_toggle"); t.textContent=st.running?"Pause":"Resume"; t.className="btn"+(st.running?"":" str"); t.style.flex="1";
+    });
+    $("#lct_done").addEventListener("click",doFinish);
+    $("#lct_cancel").addEventListener("click",()=>{ st.elapsedMs=0; ex.progressMs=0; stop(); closeModal(); });
+    upd();
+  }
+
+  if(fresh){ showReady(); }
+  else { st.running=true; showTimer(); startTick(); upd(); } /* reopening mid-session → straight back into the live timer */
 }
 function buildCardioLiveCard(ex,xi){
   const c=el("div","ex-card"); c.style.borderColor="rgba(47,230,168,.4)";
@@ -1552,6 +1608,20 @@ function randomizeFavWorkout(){
 
 /* ===================== ROUTINES — multi-day programs (v3.31) ===================== */
 function openRoutinesHub(){
+  /* one-time walkthrough the first time Programs is opened */
+  if(!DATA.meta) DATA.meta={};
+  if(!DATA.meta.routinesIntroSeen){
+    openModal(`<h3>📋 Programs — how they work</h3>
+      <div class="rt-intro">
+        <div class="rt-intro-step"><span class="rt-intro-n">1</span><div><b>A program is a multi-day plan</b><div class="muted tiny">e.g. Push / Pull / Legs. Each day holds its own exercises.</div></div></div>
+        <div class="rt-intro-step"><span class="rt-intro-n">2</span><div><b>Build it once</b><div class="muted tiny">Start from a ready-made template (then tweak it) or build your own. Add exercises to each day.</div></div></div>
+        <div class="rt-intro-step"><span class="rt-intro-n">3</span><div><b>Start any day with a tap</b><div class="muted tiny">On gym day, open your program and tap “▶ Start” on the day you're doing. It launches that session ready to log.</div></div></div>
+      </div>
+      <p class="muted tiny" style="line-height:1.5;margin:4px 0 14px">Think of it as saved <b>multi-day</b> plans — Favourites save a single workout; Programs save a whole week.</p>
+      <button class="btn str block" id="rt_intro_go">Got it — show Programs</button>`);
+    $("#rt_intro_go").addEventListener("click",()=>{ DATA.meta.routinesIntroSeen=true; save(); openRoutinesHub(); });
+    return;
+  }
   const routines=DATA.routines||[];
   const list = routines.length
     ? routines.map(r=>{
@@ -1602,26 +1672,69 @@ function startRoutineDay(r,i){
 }
 /* working draft while editing a routine */
 let routineDraft=null;
+
+/* v3.31 — starter templates (real machine names; map cleanly via EX_BY_NAME) */
+const ROUTINE_TEMPLATES=[
+  {key:"ppl", name:"Push / Pull / Legs", note:"Classic 3-day split", days:[
+    {label:"Push", exercises:["Chest Press Machine","Incline Chest Press Machine","Shoulder Press Machine","Lateral Raise Machine","Tricep Pushdown (Bar)"]},
+    {label:"Pull", exercises:["Lat Pulldown","Seated Cable Row","Reverse Pec Deck (Rear Delt)","Cable Bicep Curl (Bar)","Cable Rope Hammer Curl"]},
+    {label:"Legs", exercises:["Leg Press","Hack Squat Machine","Leg Extension","Lying Leg Curl","Standing Calf Raise Machine"]}
+  ]},
+  {key:"ul", name:"Upper / Lower", note:"4-day, alternate U/L", days:[
+    {label:"Upper", exercises:["Chest Press Machine","Lat Pulldown","Shoulder Press Machine","Seated Cable Row","Cable Bicep Curl (Bar)","Tricep Pushdown (Bar)"]},
+    {label:"Lower", exercises:["Leg Press","Leg Extension","Lying Leg Curl","Standing Calf Raise Machine","Cable Crunch"]}
+  ]},
+  {key:"fb", name:"Full Body × 3", note:"3 full-body days a week", days:[
+    {label:"Day A", exercises:["Chest Press Machine","Lat Pulldown","Leg Press","Lateral Raise Machine","Cable Crunch"]},
+    {label:"Day B", exercises:["Incline Chest Press Machine","Seated Cable Row","Hack Squat Machine","Cable Bicep Curl (Bar)","Tricep Pushdown (Bar)"]},
+    {label:"Day C", exercises:["Pec Deck (Butterfly)","Assisted Pull-Up Machine","Leg Extension","Lying Leg Curl","Shoulder Press Machine"]}
+  ]}
+];
+function newRoutineFromTemplate(tpl){
+  return {id:Date.now(), name:tpl.name, note:tpl.note,
+    days:tpl.days.map(d=>({label:d.label, exercises:d.exercises.map(n=>({name:n, group:(EX_BY_NAME[n]||{}).g||""}))}))};
+}
 function openRoutineEditor(existing){
-  routineDraft = existing
-    ? JSON.parse(JSON.stringify(existing))
-    : {id:Date.now(), name:"", note:"", days:[]};
-  paintRoutineEditor();
+  if(existing){
+    routineDraft = JSON.parse(JSON.stringify(existing));
+    paintRoutineEditor(); return;
+  }
+  /* new routine → offer a starter template or blank */
+  openModal(`<h3>New routine</h3>
+    <p class="muted tiny" style="margin-bottom:14px;line-height:1.5">Start from a ready-made program (you can tweak everything after), or build your own from scratch.</p>
+    <div class="v04-choice-grid" id="rt_tpl">
+      ${ROUTINE_TEMPLATES.map(t=>`<button class="rt-tpl-choice" data-tpl="${t.key}">
+        <b>${esc(t.name)}</b><span>${esc(t.note)} · ${t.days.length} days · ${t.days.reduce((s,d)=>s+d.exercises.length,0)} exercises</span></button>`).join("")}
+      <button class="rt-tpl-choice blank" data-tpl="__blank"><b>Start blank</b><span>Build your own day by day</span></button>
+    </div>`);
+  $("#rt_tpl").querySelectorAll("[data-tpl]").forEach(btn=>btn.addEventListener("click",()=>{
+    const k=btn.dataset.tpl;
+    if(k==="__blank"){ routineDraft={id:Date.now(), name:"", note:"", days:[{label:"Day 1", exercises:[]}]}; }
+    else { const tpl=ROUTINE_TEMPLATES.find(t=>t.key===k); routineDraft=newRoutineFromTemplate(tpl); }
+    paintRoutineEditor();
+  }));
 }
 function paintRoutineEditor(){
   const r=routineDraft;
-  const daysHTML=(r.days||[]).map((d,i)=>`<div class="rt-edit-day">
-      <div class="row" style="gap:8px;align-items:center;margin-bottom:6px">
+  const daysHTML=(r.days||[]).map((d,i)=>{
+    const exs=d.exercises||[];
+    const exHTML = exs.length
+      ? `<div class="rt-ex-chips">${exs.map((e,j)=>`<span class="rt-ex-chip">${esc(e.name)}<button class="rt-ex-x" data-exrm="${i}:${j}" title="Remove">✕</button></span>`).join("")}</div>`
+      : `<div class="rt-ex-empty">No exercises yet — tap “＋ Add exercises” below.</div>`;
+    return `<div class="rt-edit-day">
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
         <input class="input" data-dayname="${i}" value="${esc(d.label||"")}" placeholder="Day ${i+1} name (e.g. Push)" style="flex:1">
         <button class="iconbtn" data-dayrm="${i}" title="Remove day">✕</button>
       </div>
-      <div class="tiny muted" style="line-height:1.5;margin-bottom:6px">${(d.exercises||[]).map(e=>esc(e.name)).join(" · ")||"No exercises yet"}</div>
-      <button class="btn sm" data-dayex="${i}">＋ Add / edit exercises</button>
-    </div>`).join("");
-  openModal(`<h3>${routineDraft._isNew===false?"Edit":""} Routine</h3>
-    <div class="field"><label>Program name</label><input class="input" id="rt_name" value="${esc(r.name||"")}" placeholder="e.g. PPL — 6 day"></div>
+      <div class="rt-ex-head">${exs.length} exercise${exs.length===1?"":"s"}</div>
+      ${exHTML}
+      <button class="btn sm fuel block" data-dayex="${i}" style="margin-top:8px">＋ Add exercises</button>
+    </div>`;
+  }).join("");
+  openModal(`<h3>${(DATA.routines||[]).some(x=>x.id===r.id)?"Edit routine":"New routine"}</h3>
+    <div class="field"><label>Program name</label><input class="input" id="rt_name" value="${esc(r.name||"")}" placeholder="e.g. Push / Pull / Legs"></div>
     <div class="field"><label>Note (optional)</label><input class="input" id="rt_note" value="${esc(r.note||"")}" placeholder="e.g. 6 weeks, then deload"></div>
-    <div class="eyebrow" style="margin:6px 0 8px">Days</div>
+    <div class="eyebrow" style="margin:6px 0 8px">Training days</div>
     <div id="rt_days">${daysHTML||'<p class="muted tiny" style="margin:0 0 8px">No days yet — add your first below.</p>'}</div>
     <button class="btn block" id="rt_addday" style="margin-top:4px">＋ Add a day</button>
     <button class="btn str block" id="rt_save" style="margin-top:14px">Save routine</button>`);
@@ -1630,10 +1743,15 @@ function paintRoutineEditor(){
   $("#rt_addday").addEventListener("click",()=>{ syncFields(); routineDraft.days.push({label:"",exercises:[]}); paintRoutineEditor(); });
   $("#modal").querySelectorAll("[data-dayrm]").forEach(b=>b.addEventListener("click",()=>{ syncFields(); routineDraft.days.splice(+b.dataset.dayrm,1); paintRoutineEditor(); }));
   $("#modal").querySelectorAll("[data-dayex]").forEach(b=>b.addEventListener("click",()=>{ syncFields(); openRoutineDayExercises(+b.dataset.dayex); }));
+  $("#modal").querySelectorAll("[data-exrm]").forEach(b=>b.addEventListener("click",()=>{
+    syncFields(); const [di,ei]=b.dataset.exrm.split(":").map(Number);
+    if(routineDraft.days[di]&&routineDraft.days[di].exercises){ routineDraft.days[di].exercises.splice(ei,1); paintRoutineEditor(); }
+  }));
   $("#rt_save").addEventListener("click",()=>{
     syncFields();
     if(!routineDraft.name.trim()){toast("Give your routine a name");return;}
     if(!routineDraft.days.length){toast("Add at least one day");return;}
+    if(!routineDraft.days.some(d=>(d.exercises||[]).length)){toast("Add at least one exercise to a day");return;}
     routineDraft.days.forEach((d,i)=>{ if(!d.label||!d.label.trim()) d.label="Day "+(i+1); });
     if(!DATA.routines)DATA.routines=[];
     const ix=DATA.routines.findIndex(x=>x.id===routineDraft.id);
@@ -2563,7 +2681,7 @@ function makeFlexCard(wk,prs,badges){
   const draw=()=>{
   const W=1080,H=1350; const cv=document.createElement("canvas"); cv.width=W; cv.height=H;
   const x=cv.getContext("2d");
-  const BEBAS=`Impact, "Arial Narrow", sans-serif`, INTER=`system-ui, -apple-system, "Segoe UI", sans-serif`;
+  const BEBAS=`"Bebas Neue", Impact, sans-serif`, INTER=`"Inter", system-ui, sans-serif`;
   const g=x.createLinearGradient(0,0,W,H); g.addColorStop(0,"#15100b"); g.addColorStop(.55,"#0c0f17"); g.addColorStop(1,"#0a1411");
   x.fillStyle=g; x.fillRect(0,0,W,H);
   const rg=x.createRadialGradient(160,180,0,160,180,560); rg.addColorStop(0,"rgba(255,106,44,.55)"); rg.addColorStop(1,"rgba(255,106,44,0)");
@@ -2571,7 +2689,7 @@ function makeFlexCard(wk,prs,badges){
   const rg2=x.createRadialGradient(W-120,H-180,0,W-120,H-180,620); rg2.addColorStop(0,"rgba(47,230,168,.42)"); rg2.addColorStop(1,"rgba(47,230,168,0)");
   x.fillStyle=rg2; x.fillRect(0,0,W,H);
   x.textAlign="left";
-  /* brand wordmark in a local display-font stack to keep the app offline/private */
+  /* brand wordmark in Bebas to match the app */
   x.fillStyle="#fff"; x.font=`96px ${BEBAS}`; x.fillText("EVOLVE", 78, 158);
   x.fillStyle="rgba(255,255,255,.6)"; x.font=`600 28px ${INTER}`; x.fillText("TRAIN SMARTER · BECOME NEXT", 82, 202);
   x.fillStyle="#fff";
@@ -3003,7 +3121,7 @@ function renderFuel(){
   const wStepLbl=(ml)=> wIsOz ? ("+"+Math.round(ml/29.5735)) : ("+"+ml);
   wc.innerHTML=`<div class="lrow" style="padding:0 0 10px"><div class="ico">💧</div>
     <div class="main"><div class="t">Water</div><div class="s num">${wDisp(log.water)} / ${wDisp(t.water)}</div></div>
-    <div class="num" style="font-family:var(--font-display);font-size:30px;color:#5AA9FF">${Math.round(wpct)}%</div></div>
+    <div class="num" style="font-family:'Bebas Neue';font-size:30px;color:#5AA9FF">${Math.round(wpct)}%</div></div>
     <div class="bar"><i style="width:${wpct}%;background:#5AA9FF"></i></div>
     <div class="row" style="gap:8px;margin-top:12px">
      <button class="btn sm" data-w="${wStep}" style="flex:1">${wStepLbl(wStep)}</button>
@@ -3713,7 +3831,7 @@ function renderStats(){
     const gc=el("div","card");
     gc.innerHTML=`<div class="lrow" style="padding:0 0 10px"><div class="main">
       <div class="t">Goal weight</div><div class="s num">${bodyStr(now)} → ${bodyStr(goal)}</div></div>
-      <div class="num" style="font-family:var(--font-display);font-size:30px;color:var(--fuel)">${prog}%</div></div>
+      <div class="num" style="font-family:'Bebas Neue';font-size:30px;color:var(--fuel)">${prog}%</div></div>
       <div class="bar"><i style="width:${prog}%;background:var(--grad-fuel)"></i></div>`;
     body.appendChild(gc);
   }
@@ -3838,7 +3956,7 @@ function renderStats(){
       body.appendChild(sum);
       if(totKm>0){
         const km=el("div","card"); km.style.marginTop="12px";
-        km.innerHTML=`<div class="lrow" style="padding:0"><div class="ico">📍</div><div class="main"><div class="t">Total distance (estimated)</div><div class="s">across all cardio sessions</div></div><div class="num" style="font-family:var(--font-display);font-size:30px;color:var(--blue)">${totKm.toFixed(1)} km</div></div>`;
+        km.innerHTML=`<div class="lrow" style="padding:0"><div class="ico">📍</div><div class="main"><div class="t">Total distance (estimated)</div><div class="s">across all cardio sessions</div></div><div class="num" style="font-family:'Bebas Neue';font-size:30px;color:var(--blue)">${totKm.toFixed(1)} km</div></div>`;
         body.appendChild(km);
       }
       const cc=el("div","card"); cc.style.marginTop="12px";
@@ -4045,6 +4163,7 @@ const LAST_UPDATED="14 June 2026";
 const LATEST_NUM="3.31";
 const LATEST_TITLE="Routines, progress photos, CSV export & logger polish";
 const LATEST_ITEMS=[
+  "<b>Choose your heading font</b> — Settings → Preferences now has Modern, Bold and Classic styles. Modern (clean and legible) is the new default.",
   "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap.",
   "<b>Progress photos</b> — a private photo timeline in Progress → Trends, stored only on this device and never uploaded or backed up.",
   "<b>CSV export</b> — save your workouts or food log as a spreadsheet (Settings → Backup) for your own records.",
@@ -4052,7 +4171,7 @@ const LATEST_ITEMS=[
   "<b>Faster food logging</b> — ＋ Add food now sits at the top of Fuel, with a floating ＋ that follows you as you scroll.",
   "<b>Smarter portions</b> — common foods show a sensible portion (1 egg, 1 slice) while everything else uses grams; you can always type grams.",
   "<b>Your own foods, categorised</b> — tag a custom food with a category so it shows up there as well as under My foods.",
-  "<b>Cleaner welcome screen</b> — the app icon now sits without a frame."
+  "<b>Fixes</b> — rest-timer labels now read 1:30 / 2:30 (not 1.5:30), and the welcome screen icon sits without a frame."
 ];
 const HISTORY_330={num:"3.30-test",title:"Rebuilt food logger",items:[
   "<b>Plate-based logger</b> — add several foods to a running plate, then log the whole meal at once.",
@@ -4062,7 +4181,7 @@ const HISTORY_330={num:"3.30-test",title:"Rebuilt food logger",items:[
 function openChangelog(){
   const v=(num,name,items)=>`<div style="margin-bottom:20px">
     <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:7px">
-      <span style="font-family:var(--font-display);font-size:22px;color:var(--strength)">v${num}</span>
+      <span style="font-family:'Bebas Neue';font-size:22px;color:var(--strength)">v${num}</span>
       <span style="font-weight:700;font-size:14px">${name}</span></div>
     <div class="muted" style="font-size:13px;line-height:1.65">${items.map(i=>"• "+i).join("<br>")}</div></div>`;
   openModal(`<h3>Changelog 📜</h3>
@@ -4355,7 +4474,7 @@ function renderMore(){
     const restOpts=[60,90,120,150,180];
     const tm=el("div"); tm.style.marginBottom="14px";
     tm.innerHTML=`<div class="tiny muted" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Default rest timer</div>
-      <div class="seg" id="pf_rest">${restOpts.map(s=>`<button data-v="${s}" class="${(+DATA.prefs.restDefault===s)?"on":""}">${s<60?s+"s":(s/60)+(s%60?":"+String(s%60).padStart(2,"0"):"m")}</button>`).join("")}</div>
+      <div class="seg" id="pf_rest">${restOpts.map(s=>`<button data-v="${s}" class="${(+DATA.prefs.restDefault===s)?"on":""}">${s<60?s+"s":Math.floor(s/60)+(s%60?":"+String(s%60).padStart(2,"0"):"m")}</button>`).join("")}</div>
       <div class="tiny muted" style="margin-top:5px">New exercises start with this rest length. You can still change it per exercise.</div>`;
     body.appendChild(tm);
     const bp=el("div"); bp.style.marginBottom="14px";
@@ -4395,7 +4514,21 @@ function renderMore(){
       <div class="theme-row" id="pf_theme">${Object.keys(THEMES).map(k=>`<button class="theme-sw ${(DATA.prefs.theme||'ember')===k?'on':''}" data-v="${k}" title="${THEMES[k].name}" style="background:linear-gradient(135deg,${THEMES[k].a2},${THEMES[k].a})"></button>`).join("")}</div>
       <div class="tiny muted" id="pf_theme_lab" style="margin-top:8px">${THEMES[DATA.prefs.theme||'ember'].name}</div>`;
     body.appendChild(th);
+
+    const hf=el("div"); hf.style.marginTop="18px";
+    const curHF=DATA.prefs.headingFont||"modern";
+    hf.innerHTML=`<div class="tiny muted" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Heading font</div>
+      <div class="seg" id="pf_hfont">${Object.keys(HEADING_FONTS).map(k=>`<button data-v="${k}" class="${curHF===k?'on':''}" style="font-family:${HEADING_FONTS[k].stack};font-weight:800;font-size:16px">${HEADING_FONTS[k].label}</button>`).join("")}</div>
+      <div class="tiny muted" id="pf_hfont_lab" style="margin-top:8px">${HEADING_FONTS[curHF].sample}</div>`;
+    body.appendChild(hf);
+
     bindInfo(body);
+    $("#pf_hfont").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
+      DATA.prefs.headingFont=btn.dataset.v; save(); applyHeadingFont(btn.dataset.v);
+      $("#pf_hfont").querySelectorAll("button").forEach(x=>x.classList.remove("on")); btn.classList.add("on");
+      const lab=$("#pf_hfont_lab"); if(lab)lab.textContent=HEADING_FONTS[btn.dataset.v].sample;
+      toast("Heading font: "+HEADING_FONTS[btn.dataset.v].label);
+    }));
     $("#pf_addex").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
       DATA.prefs.addExercise=btn.dataset.v==="yes";save();renderMore();toast(DATA.prefs.addExercise?"Burned calories now add to your budget":"Burned calories logged for info only");}));
     $("#pf_ach").querySelectorAll("button").forEach(btn=>btn.addEventListener("click",()=>{
@@ -4473,14 +4606,14 @@ function renderMore(){
 
     const plain=el("div","card"); plain.style.marginTop="12px";
     plain.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">💾 Backup code</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Simple copy/paste backup. Useful for quick manual saves, but it is not encrypted — anyone with the code can restore/read your data. Use encrypted backup files for cloud storage.</p>`;
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Simple copy/paste backup. Useful for quick manual saves, but encrypted backup files are better for cloud storage.</p>`;
     const exb=el("button","btn block","Export backup code"); exb.addEventListener("click",openExport);
     const imb=el("button","btn ghost block","Import / restore from code"); imb.style.marginTop="10px"; imb.addEventListener("click",openImport);
     plain.append(exb,imb); body.appendChild(plain);
 
     const rem=el("div","card"); rem.style.marginTop="12px";
     rem.innerHTML=`<div class="t" style="font-size:15px;font-weight:800">🔔 Backup reminders</div>
-      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve checks for due backups when you open or return to the app. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
+      <p class="tiny muted" style="margin:8px 0 12px;line-height:1.55">Set how often Evolve reminds you. Mobile notification support depends on browser/PWA install state, so Evolve also shows an in-app reminder when a backup is due.</p>
       <div class="seg scroll" id="bk_freq" style="margin-bottom:10px">
         ${[["off","Off"],["daily","Daily"],["weekly","Weekly"],["biweekly","Biweekly"],["monthly","Monthly"]].map(([v,l])=>`<button data-v="${v}" class="${(DATA.meta.backupReminder||"weekly")===v?"on":""}">${l}</button>`).join("")}
       </div>`;
@@ -4514,7 +4647,7 @@ function renderMore(){
 
   /* ---- DANGER ZONE ---- */
   function buildDanger(body){
-    body.appendChild(el("p","tiny muted","Erasing wipes Evolve data on this device and can't be undone. Unlock first, then confirm — two steps so it can't happen by accident. Other site/app storage on this domain is left alone.")).style.margin="0 0 12px";
+    body.appendChild(el("p","tiny muted","Erasing wipes everything on this device and can't be undone. Unlock first, then confirm — two steps so it can't happen by accident.")).style.margin="0 0 12px";
     let resetUnlocked=false;
     const unlockBtn=el("button","btn block","🔒 Unlock reset");
     const reset=el("button","btn danger-solid block","Reset all data"); reset.style.marginTop="10px"; reset.disabled=true;
@@ -4526,9 +4659,10 @@ function renderMore(){
     reset.addEventListener("click",()=>{
       if(reset.disabled)return;
       confirmModal({title:"Erase all data?",danger:true,confirmText:"Erase everything",
-        body:"This wipes Evolve data on this device — workouts, food, weight, settings, profile photo, progress photos and any active workout — and can't be undone. Export a backup first if you're unsure.",
+        body:"This wipes all Evolve data on this device — workouts, food, weight and settings — and can't be undone. Export a backup first if you're unsure.",
         onConfirm:()=>{
-          clearEvolveStorage();
+          try{localStorage.removeItem(KEY);}catch(e){}
+          try{localStorage.clear();}catch(e){}
           DATA=JSON.parse(JSON.stringify(DEFAULT_DATA)); DATA.meta.created=todayISO();
           location.reload();
         }});
@@ -4564,20 +4698,6 @@ function renderMore(){
   b.lastChild.style.padding="18px 0 4px";
 }
 
-function isPlainObject(x){return !!x && typeof x==="object" && !Array.isArray(x);}
-function prepareRestoredData(obj){
-  if(!isPlainObject(obj)) throw new Error("bad-backup");
-  const arrayKeys=["customFoods","favFoods","favMachines","favExercises","favWorkouts","routines","cardio","workouts","weights"];
-  arrayKeys.forEach(k=>{ if(k in obj && !Array.isArray(obj[k])) throw new Error("bad-backup:"+k); });
-  const objectKeys=["prefs","log","ach","statResets","meta"];
-  objectKeys.forEach(k=>{ if(k in obj && !isPlainObject(obj[k])) throw new Error("bad-backup:"+k); });
-  if("profile" in obj && obj.profile!==null && !isPlainObject(obj.profile)) throw new Error("bad-backup:profile");
-  if("targets" in obj && obj.targets!==null && !isPlainObject(obj.targets)) throw new Error("bad-backup:targets");
-  if(!("workouts" in obj) && !("log" in obj) && !("weights" in obj)) throw new Error("bad-backup:empty");
-  const restored=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj);
-  migrate(restored);
-  return restored;
-}
 function cleanBackupData(){
   const copy=JSON.parse(JSON.stringify(DATA));
   if(copy.meta){
@@ -4608,16 +4728,17 @@ async function decryptEncryptedBackupText(text,password){
   const key=await deriveBackupKey(password,b64ToBytes(box.salt));
   const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64ToBytes(box.iv)},key,b64ToBytes(box.data));
   const obj=JSON.parse(new TextDecoder().decode(plain));
-  return prepareRestoredData(obj);
+  if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad-backup");
+  return obj;
 }
-async function saveOrShareBlob(blob,name,title="Evolve file",text="Evolve file",sharedMsg="File shared",savedMsg="File saved"){
+async function saveOrShareBlob(blob,name,title="Evolve backup",text="Evolve backup file"){
   try{
     if(navigator.share && typeof File!=="undefined"){
       const file=new File([blob],name,{type:blob.type||"application/octet-stream"});
-      if(!navigator.canShare || navigator.canShare({files:[file]})){await navigator.share({title,text,files:[file]}); toast(sharedMsg); return;}
+      if(!navigator.canShare || navigator.canShare({files:[file]})){await navigator.share({title,text,files:[file]}); toast("Backup shared"); return;}
     }
   }catch(e){}
-  try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast(savedMsg);}
+  try{const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); toast("Backup file saved");}
   catch(e){toast("Couldn't save file here");}
 }
 /* v3.31 — CSV exports (records only; not an encrypted/restorable backup) */
@@ -4638,7 +4759,7 @@ function exportWorkoutsCSV(){
     });
     if(!(w.exercises||[]).length) rows.push([w.date,w.title||"",w.type||"","(no exercises logged)","","","","",""]);
   });
-  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-workouts-"+todayISO()+".csv","Evolve workouts","Evolve workout history (CSV)","Workouts CSV shared","Workouts CSV saved");
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-workouts-"+todayISO()+".csv","Evolve workouts","Evolve workout history (CSV)");
 }
 function exportFoodCSV(){
   const rows=[["Date","Meal","Food","Grams",eUnit(),"Protein (g)","Carbs (g)","Fat (g)"]];
@@ -4649,7 +4770,7 @@ function exportFoodCSV(){
       rows.push([d,(mealById(mealOf(f))||{}).name||"",f.name,Math.round(f.grams||0),eVal(f.kcal||0),Math.round((f.p||0)*10)/10,Math.round((f.c||0)*10)/10,Math.round((f.f||0)*10)/10]);
     });
   });
-  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-food-"+todayISO()+".csv","Evolve food log","Evolve food log (CSV)","Food CSV shared","Food CSV saved");
+  saveOrShareBlob(new Blob([_csvRows(rows)],{type:"text/csv"}),"evolve-food-"+todayISO()+".csv","Evolve food log","Evolve food log (CSV)");
 }
 function openEncryptedExport(){
   if(!backupCryptoReady()){toast("Encryption is not available in this browser");return;}
@@ -4670,7 +4791,7 @@ function openEncryptedExportPassword(){
   $("#enc_make").addEventListener("click",async()=>{
     const p=$("#enc_pw").value, p2=$("#enc_pw2").value;
     if(p.length<8){toast("Use at least 8 characters");return;} if(p!==p2){toast("Passwords do not match");return;}
-    try{const text=await makeEncryptedBackupText(p); DATA.meta.lastBackup=todayISO(); save(); closeModal(); await saveOrShareBlob(new Blob([text],{type:"application/json"}),`evolve-encrypted-backup-${todayISO()}.json`,"Evolve encrypted backup","Encrypted Evolve backup","Encrypted backup shared","Encrypted backup file saved");}
+    try{const text=await makeEncryptedBackupText(p); DATA.meta.lastBackup=todayISO(); save(); closeModal(); await saveOrShareBlob(new Blob([text],{type:"application/json"}),`evolve-encrypted-backup-${todayISO()}.json`,"Evolve encrypted backup","Encrypted Evolve backup");}
     catch(e){toast("Couldn't create encrypted backup");}
   });
 }
@@ -4685,7 +4806,7 @@ function openEncryptedRestoreText(text){
     <div class="field"><label>Password</label><input class="input" id="dec_pw" type="password" autocomplete="current-password"></div>
     <button class="btn danger-solid block" id="dec_go">Decrypt & restore</button>`);
   $("#dec_go").addEventListener("click",async()=>{
-    try{DATA=await decryptEncryptedBackupText(text,$("#dec_pw").value); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
+    try{const obj=await decryptEncryptedBackupText(text,$("#dec_pw").value); DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj); migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Encrypted backup restored ✓");}
     catch(e){toast("Couldn't decrypt — check the password/file");}
   });
 }
@@ -4733,8 +4854,9 @@ function openImport(){
     raw=raw.replace(/^\s*EVOLVE\d*\s*:\s*/i,"").replace(/\s+/g,""); /* drop optional EVOLVE1: tag (any case) + any stray spaces/line breaks */
     try{
       const obj=JSON.parse(decodeURIComponent(escape(atob(raw))));
-      DATA=prepareRestoredData(obj);
-      save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
+      if(!obj||typeof obj!=="object"||!("workouts" in obj)) throw new Error("bad");
+      DATA=Object.assign(JSON.parse(JSON.stringify(DEFAULT_DATA)),obj);
+      migrate(DATA); save(); closeModal(); updateHeader(); switchTab("stats"); toast("Data restored ✓");
     }catch(e){ toast("That code didn't work — check you copied all of it"); }
   });
 }

@@ -2,7 +2,7 @@
 
 **Train smarter · Become next.**
 
-> Current release: **v3.31** (final, privacy/data-safety rebuild) — adds multi-day **routines**, private **progress photos**, **CSV export**, and a **1RM training-percentage** table; reworks food logging (＋ Add food at the top plus a floating ＋, smarter exact-name portions, categorised custom foods); and removes the splash logo frame.
+> Current release: **v3.31** (final) — adds multi-day **routines**, private **progress photos**, **CSV export**, and a **1RM training-percentage** table; reworks food logging (＋ Add food at the top plus a floating ＋, smarter exact-name portions, categorised custom foods); and removes the splash logo frame.
 
 Evolve is an all-in-one workout and nutrition tracker that runs entirely on your phone. Build and follow workouts, track your lifts, plan your week, log food and macros, and watch your progress grow — online or off, with no account and no data ever leaving your device.
 
