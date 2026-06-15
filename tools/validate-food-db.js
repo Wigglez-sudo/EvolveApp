@@ -51,11 +51,23 @@ function main() {
     if (!Array.isArray(items)) { err(`${shop.file} is not an array`); continue; }
     console.log(`\n${shop.name} (${shop.file}): ${items.length} items`);
     if (items.length !== shop.count) warn(`manifest count ${shop.count} ≠ actual ${items.length}`);
-    const sample = items.slice(0, 2000); // validate a generous sample for speed
-    sample.forEach((it, i) => validateItem(it, `${shop.file}[${i}]`));
+    /* Check EVERY item (it's just arithmetic — fast even for 10k rows) so the
+       report lists the exact file + index of every bad row. That's what lets you
+       open food-db/<shop>.json, find that index, and delete the offending entry. */
+    items.forEach((it, i) => validateItem(it, `${shop.file}[${i}]`));
   }
 
   console.log(`\nDone. ${errors} error(s), ${warnings} warning(s).`);
+  /* In CI this runs AFTER the commit (see the workflow), so a hard failure here
+     turns the run RED without losing the build — that's the signal to open the
+     committed food-db/<shop>.json, delete the flagged row(s), and commit.
+     Optional --report (or EVOLVE_VALIDATE_REPORT=1) prints problems but exits 0,
+     handy for a local dry-run that shouldn't fail. */
+  const reportOnly = process.argv.includes("--report") || process.env.EVOLVE_VALIDATE_REPORT === "1";
+  if (errors && reportOnly) {
+    console.error(`\n⚠ ${errors} validation error(s) found (report-only mode — not failing). Listed above with their file + index so you can delete them.`);
+    return;
+  }
   if (errors) process.exit(1);
 }
 main();

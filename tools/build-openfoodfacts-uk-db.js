@@ -144,8 +144,15 @@ function mapProduct(p) {
   const pr = num(nut.proteins_100g), ca = num(nut.carbohydrates_100g), fa = num(nut.fat_100g);
   /* require all four macros (quality bar, matches their script) */
   if (kcal == null || pr == null || ca == null || fa == null) return null;
-  if (kcal < 0 || kcal > 1000) return null;
+  /* 900 kcal/100g is the physical max (pure fat). Anything above it is bad OFF
+     data (per-serving/per-pack mislabelled as per-100g, or a typo). Must match
+     the validator's ceiling (validate-food-db.js) or the build writes items CI
+     will always reject. */
+  if (kcal < 0 || kcal > 900) return null;
   if ([pr, ca, fa].some(v => v < 0 || v > 100)) return null;
+  /* belt-and-braces: the validator requires finite numbers, so never let a
+     NaN/Infinity slip through into a written file (would fail CI otherwise). */
+  if (![kcal, pr, ca, fa].every(Number.isFinite)) return null;
   const catRaw = firstCsv(p.categories) || firstCsv(p.categories_tags) || firstCsv(p.pnns_groups_2);
   const out = {
     n: name,
