@@ -455,6 +455,11 @@ function openModal(html, opts){
   opts=opts||{};
   _modalLocked=!!opts.mandatory;
   const w=$("#modalWrap");
+  /* if the splash is still showing, the modal (z-index 180) would open BEHIND
+     it (z-index 200) and be invisible until the splash is dismissed. Lift the
+     modal above the splash in that case; restored on close. */
+  const splash=document.getElementById("splash");
+  if(splash && !splash.classList.contains("gone")){ w.style.zIndex="240"; }
   const top=_modalLocked
     ? '<div class="modal-top"><span class="grab"></span></div>'
     : '<div class="modal-top"><span class="grab"></span><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>';
@@ -475,6 +480,7 @@ function closeModal(fromPop, force){
   const w=$("#modalWrap"); if(!w.classList.contains("on") && !_modalOpen) return;
   const wasOpen=_modalOpen; _modalOpen=false; _modalLocked=false;
   w.classList.remove("on");
+  w.style.zIndex=""; /* clear any splash-time lift */
   if(wasOpen && !fromPop && history.state && history.state.evolveModal){ _ignorePop=true; try{history.back();}catch(e){ _ignorePop=false; } }
 }
 $("#modalBg").addEventListener("click",()=>closeModal());
@@ -4652,6 +4658,7 @@ const LATEST_TITLE="Evolve 1.0 — the full release";
 const LATEST_ITEMS=[
   "<b>🎉 Evolve is 1.0!</b> After a long beta, this is the first full release — a complete, private, offline-first gym &amp; nutrition tracker. Everything below is what's new in 1.0; earlier entries were the beta builds that got us here.",
   "<b>AI Coach can build your workouts</b> — in the Coach tab, tap “Generate a workout”, pick the muscle groups and length you want (or let it recommend one), and the AI returns a real, ready-to-use session. <b>Start it now</b> or <b>Save for later</b> — saved ones land in your new Saved workouts list under Train.",
+  "<b>🛒 Food packs (optional)</b> — add big UK supermarket food databases from Settings → Food packs. Pick your shops (Tesco, Sainsbury's, Asda, Aldi) and download only those; their foods slot into the normal categories with the shop name, and you can filter your food search by shop. Downloaded packs live on your device and work offline. They only download public food lists — your data is never uploaded.",
   "<b>Saved workouts</b> — Train now has a dedicated Saved workouts section. Save any session (tap the ★ during a workout) or a Coach-generated one, and reuse it any time.",
   "<b>Sets pre-fill themselves</b> — no more typing the same weight &amp; reps every time. New sets start pre-filled with your usual numbers (or your last session if newer); you just tap to confirm each one. Set your usual per exercise from the ⋯ menu. Works for machines, free weights and home moves.",
   "<b>AI Coach (optional)</b> — connect your own free OpenRouter key to chat about training &amp; nutrition or analyse your logs. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",

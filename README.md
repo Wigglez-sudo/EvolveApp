@@ -55,6 +55,12 @@ It's built for people who want a powerful training and food log *without* handin
 - **Chat** about your training & nutrition, **generate a ready-to-use workout** (Start it now or Save for later), or **analyse your recent logs** — grounded in your actual data.
 - 🔒 **Privacy-first:** this is the *only* feature that sends data off your device, and it tells you exactly what's shared before you enable it. Your API key is stored **only on this device**, is **never** included in any backup, and is never sent anywhere except OpenRouter.
 
+### 🛒 Food packs *(optional)*
+- Add big **UK supermarket food databases** from **Settings → Food packs** — Tesco, Sainsbury's, Asda and Aldi.
+- **Download only the shops you want.** Each pack's foods slot into the **normal categories** (Cheese, Dairy, Fast food & meals…) with the shop's name, and you can **filter your food search by shop**.
+- Packs are stored **on your device** and work **offline** once downloaded.
+- The data is built from [Open Food Facts](https://world.openfoodfacts.org) by a scheduled GitHub Action and served from this repo. The app only **downloads** these public lists — it **never uploads** any of your data.
+
 ### ⚙️ Settings & personalisation
 - **🎨 Themes** that recolour the whole app.
 - **🔤 Heading font** — choose **Modern**, **Bold** or **Classic**.
@@ -115,10 +121,14 @@ Once installed it runs full-screen and works **offline**.
 | `index.html` | App shell & layout |
 | `styles.css` | All styling |
 | `data.js` | Exercise & food databases |
+| `food-packs.js` | Optional downloadable supermarket food packs (IndexedDB) |
 | `app.js` | All app logic |
 | `sw.js` | Service worker (offline cache) |
 | `manifest.json` | PWA manifest |
 | `icon-*.png`, `apple-touch-icon.png`, `favicon.png` | App icons |
+| `food-db/` | Generated per-shop food packs + manifest (built by the Action) |
+| `tools/` | Open Food Facts build & validation scripts |
+| `.github/workflows/` | Monthly food-database update workflow |
 | `Evolve-v1.0-preview.html` | Single-file build for quick testing |
 
 ---
@@ -128,6 +138,7 @@ Once installed it runs full-screen and works **offline**.
 After a long beta (the 3.x series), this is Evolve's first full release. Highlights:
 
 - 🤖 **AI Coach that builds workouts** — generate a ready-to-use session and Start it now or Save for later
+- 🛒 **Food packs** — optional downloadable UK supermarket databases (Tesco, Sainsbury's, Asda, Aldi) that fold into your food search, offline
 - 💾 **Saved workouts** — a dedicated section in Train for sessions you save or the Coach generates
 - ⚡ **Sets pre-fill themselves** — your usual weight & reps (or last session), so you just tap to confirm
 - 🔄 **In-app updates** — an "Update available" banner; one tap to update
