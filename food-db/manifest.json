@@ -1,20 +1,21 @@
 {
   "version": "2026-06-15",
-  "generated": "2026-06-15T12:34:03.324Z",
+  "generated": "2026-06-15T12:51:26.945Z",
+  "total": 721,
   "shops": [
     {
       "id": "tesco",
       "name": "Tesco",
       "file": "tesco.json",
-      "count": 0,
-      "bytes": 2
+      "count": 330,
+      "bytes": 52369
     },
     {
       "id": "sainsburys",
       "name": "Sainsbury's",
       "file": "sainsburys.json",
-      "count": 187,
-      "bytes": 31687
+      "count": 217,
+      "bytes": 36809
     },
     {
       "id": "asda",
@@ -27,8 +28,8 @@
       "id": "aldi",
       "name": "Aldi",
       "file": "aldi.json",
-      "count": 0,
-      "bytes": 2
+      "count": 63,
+      "bytes": 9846
     }
   ]
 }
