@@ -1,35 +1,36 @@
 {
   "version": "2026-06-15",
-  "generated": "2026-06-15T12:51:26.945Z",
-  "total": 721,
+  "generated": "2026-06-15T16:08:10.693Z",
+  "total": 10000,
+  "attribution": "Contains information from Open Food Facts contributors, reused under the Open Database License (ODbL).",
   "shops": [
     {
       "id": "tesco",
       "name": "Tesco",
       "file": "tesco.json",
-      "count": 330,
-      "bytes": 52369
+      "count": 2500,
+      "bytes": 376707
     },
     {
       "id": "sainsburys",
       "name": "Sainsbury's",
       "file": "sainsburys.json",
-      "count": 217,
-      "bytes": 36809
+      "count": 2500,
+      "bytes": 392365
     },
     {
       "id": "asda",
       "name": "Asda",
       "file": "asda.json",
-      "count": 111,
-      "bytes": 17197
+      "count": 2500,
+      "bytes": 331919
     },
     {
       "id": "aldi",
       "name": "Aldi",
       "file": "aldi.json",
-      "count": 63,
-      "bytes": 9846
+      "count": 2500,
+      "bytes": 365445
     }
   ]
 }
