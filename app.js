@@ -150,6 +150,9 @@ function migrate(d){
   if(!d.prefs.headingFont) d.prefs.headingFont="modern";             /* v3.31: heading font style */
   if(typeof d.prefs.coachConsent!=="boolean") d.prefs.coachConsent=false; /* v3.31: AI Coach privacy consent */
   if(!d.prefs.coachModel) d.prefs.coachModel="deepseek/deepseek-chat-v3-0324:free";
+  /* v3.31: retire model slugs that OpenRouter has dropped, so the Coach keeps working */
+  const DEAD_COACH_MODELS=["google/gemini-2.0-flash-exp:free","google/gemini-flash-1.5-exp:free"];
+  if(DEAD_COACH_MODELS.indexOf(d.prefs.coachModel)>=0) d.prefs.coachModel="deepseek/deepseek-chat-v3-0324:free";
   if(typeof d.prefs.restBeep!=="boolean") d.prefs.restBeep=true;     /* beep when rest ends */
   if(typeof d.prefs.restFlash!=="boolean") d.prefs.restFlash=true;   /* screen flash when rest ends */
   if(typeof d.prefs.keepAwake!=="boolean") d.prefs.keepAwake=true;   /* keep screen awake during use */
@@ -1816,12 +1819,35 @@ function openRoutineDayExercises(dayIdx){
    OpenRouter. A summary of the user's training/nutrition is sent to OpenRouter ONLY when
    the user actively asks the Coach something, and only after they've given consent. */
 const COACH_MODELS=[
-  {id:"deepseek/deepseek-chat-v3-0324:free", name:"DeepSeek V3 (free)"},
+  {id:"deepseek/deepseek-chat-v3-0324:free", name:"DeepSeek V3 (free) — recommended"},
+  {id:"deepseek/deepseek-r1:free", name:"DeepSeek R1 (free)"},
   {id:"meta-llama/llama-3.3-70b-instruct:free", name:"Llama 3.3 70B (free)"},
-  {id:"google/gemini-2.0-flash-exp:free", name:"Gemini 2.0 Flash (free)"},
+  {id:"google/gemma-3-27b-it:free", name:"Gemma 3 27B (free)"},
+  {id:"openrouter/auto", name:"Auto — always works (uses a little credit)"},
   {id:"openai/gpt-4o-mini", name:"GPT-4o mini (paid)"},
   {id:"anthropic/claude-3.5-haiku", name:"Claude 3.5 Haiku (paid)"}
 ];
+/* the live list changes often; this lets the user pull current free models */
+let coachLiveModels=null;
+async function fetchCoachModels(){
+  try{
+    const res=await fetch("https://openrouter.ai/api/v1/models");
+    if(!res.ok) throw new Error("models fetch failed");
+    const data=await res.json();
+    const free=(data.data||[]).filter(m=>{
+      const pr=m.pricing||{}; return (+pr.prompt===0 && +pr.completion===0);
+    }).map(m=>({id:m.id, name:(m.name||m.id)+" (free)"}));
+    /* free list first, then auto + paid staples */
+    coachLiveModels=[
+      ...free.sort((a,b)=>a.name.localeCompare(b.name)),
+      {id:"openrouter/auto", name:"Auto — always works (uses a little credit)"},
+      {id:"openai/gpt-4o-mini", name:"GPT-4o mini (paid)"},
+      {id:"anthropic/claude-3.5-haiku", name:"Claude 3.5 Haiku (paid)"}
+    ];
+    return coachLiveModels;
+  }catch(e){ return null; }
+}
+function coachModelList(){ return coachLiveModels||COACH_MODELS; }
 function getCoachKey(){ try{return localStorage.getItem(COACH_KEY_KEY)||"";}catch(e){return "";} }
 function setCoachKey(k){ try{ if(k)localStorage.setItem(COACH_KEY_KEY,k); else localStorage.removeItem(COACH_KEY_KEY); return true;}catch(e){return false;} }
 function coachReady(){ return DATA.prefs.coachConsent===true && !!getCoachKey(); }
@@ -1861,8 +1887,10 @@ async function coachAsk(messages){
     let msg="Request failed ("+res.status+")";
     try{ const e=await res.json(); if(e.error&&e.error.message)msg=e.error.message; }catch(_){}
     if(res.status===401) msg="Invalid API key — check it in Coach settings.";
-    if(res.status===402) msg="This model needs credit on your OpenRouter account, or pick a free model.";
-    if(res.status===429) msg="Rate limited — wait a moment, or try a different model.";
+    if(res.status===402) msg="This model needs credit on your OpenRouter account. Pick a free model or “Auto”.";
+    if(res.status===429) msg="Rate limited (free models are busy). Wait a moment, or switch model in Coach settings.";
+    if(res.status===404 || /no endpoints|unavailable|not.*found/i.test(msg))
+      msg="That model isn't available right now. Open Coach settings → “↻ Load current free models” and pick another (or use “Auto”).";
     throw new Error(msg);
   }
   const data=await res.json();
@@ -1892,18 +1920,35 @@ function openCoachConsent(onAgree){
   $("#coach_decline").addEventListener("click",()=>closeModal());
 }
 function openCoachKeySetup(onDone){
-  openModal(`<h3>Connect OpenRouter</h3>
-    <p class="muted tiny" style="line-height:1.5;margin-bottom:12px">The Coach uses <b>OpenRouter</b>, which gives access to many AI models with one key — including free ones. Create a free key at <b>openrouter.ai/keys</b>, then paste it below. It's stored only on this device.</p>
-    <div class="field"><label>OpenRouter API key</label><input class="input" id="coach_key" type="password" placeholder="sk-or-..." value="${esc(getCoachKey())}" autocomplete="off"></div>
-    <div class="field"><label>Model</label><select class="input" id="coach_model">${COACH_MODELS.map(m=>`<option value="${esc(m.id)}" ${DATA.prefs.coachModel===m.id?"selected":""}>${esc(m.name)}</option>`).join("")}</select></div>
-    <button class="btn str block" id="coach_savekey">Save</button>
-    ${getCoachKey()?`<button class="btn ghost block" id="coach_delkey" style="margin-top:10px">Delete key from this device</button>`:""}`);
-  $("#coach_savekey").addEventListener("click",()=>{
-    const k=$("#coach_key").value.trim(); DATA.prefs.coachModel=$("#coach_model").value; save();
-    if(!setCoachKey(k)){toast("Couldn't save key");return;}
-    closeModal(); toast(k?"Coach connected":"Key cleared"); if(onDone)onDone();
-  });
-  const del=$("#coach_delkey"); if(del)del.addEventListener("click",()=>{ setCoachKey(""); closeModal(); toast("Key deleted"); if(onDone)onDone(); });
+  function modelOptions(){
+    const list=coachModelList().slice();
+    /* make sure the currently-selected model is always an option */
+    if(!list.some(m=>m.id===DATA.prefs.coachModel)) list.unshift({id:DATA.prefs.coachModel,name:DATA.prefs.coachModel});
+    return list.map(m=>`<option value="${esc(m.id)}" ${DATA.prefs.coachModel===m.id?"selected":""}>${esc(m.name)}</option>`).join("");
+  }
+  function paint(){
+    openModal(`<h3>Connect OpenRouter</h3>
+      <p class="muted tiny" style="line-height:1.5;margin-bottom:12px">The Coach uses <b>OpenRouter</b>, which gives access to many AI models with one key — including free ones. Create a free key at <b>openrouter.ai/keys</b>, then paste it below. It's stored only on this device.</p>
+      <div class="field"><label>OpenRouter API key</label><input class="input" id="coach_key" type="password" placeholder="sk-or-..." value="${esc(getCoachKey())}" autocomplete="off"></div>
+      <div class="field"><label>Model</label><select class="input" id="coach_model">${modelOptions()}</select>
+        <div class="tiny muted" style="margin-top:6px">Free models change often. <button class="linklike" id="coach_refresh" style="font-size:12px">↻ Load current free models</button></div>
+        <div class="tiny muted" style="margin-top:4px">Tip: “Auto” always works but uses a little credit. If a free model says it's unavailable, refresh and pick another.</div></div>
+      <button class="btn str block" id="coach_savekey">Save</button>
+      ${getCoachKey()?`<button class="btn ghost block" id="coach_delkey" style="margin-top:10px">Delete key from this device</button>`:""}`);
+    $("#coach_refresh").addEventListener("click",async ()=>{
+      const r=$("#coach_refresh"); r.textContent="Loading…";
+      DATA.prefs.coachModel=$("#coach_model").value; /* keep current pick */
+      const got=await fetchCoachModels();
+      if(got){ paint(); toast("Loaded "+(got.length)+" models"); } else { r.textContent="Couldn't load — try again"; }
+    });
+    $("#coach_savekey").addEventListener("click",()=>{
+      const k=$("#coach_key").value.trim(); DATA.prefs.coachModel=$("#coach_model").value; save();
+      if(!setCoachKey(k)){toast("Couldn't save key");return;}
+      closeModal(); toast(k?"Coach connected":"Key cleared"); if(onDone)onDone();
+    });
+    const del=$("#coach_delkey"); if(del)del.addEventListener("click",()=>{ setCoachKey(""); closeModal(); toast("Key deleted"); if(onDone)onDone(); });
+  }
+  paint();
 }
 
 /* ---- the Coach tab ---- */
@@ -4354,7 +4399,8 @@ const LAST_UPDATED="14 June 2026";
 const LATEST_NUM="3.31";
 const LATEST_TITLE="Routines, progress photos, CSV export & logger polish";
 const LATEST_ITEMS=[
-  "<b>AI Coach (optional)</b> — a new Coach tab. Connect your own free OpenRouter key to chat about training &amp; nutrition, generate workouts, or analyse your logs. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
+  "<b>In-app updates</b> — Evolve now updates itself. When a new version is live you'll get an “Update available” banner; one tap and you're on the latest. No more closing and reopening the app. There's also a “Check for updates” button in Settings → Help &amp; guide.",
+  "<b>AI Coach (optional)</b> — a new Coach tab. Connect your own free OpenRouter key to chat about training &amp; nutrition, generate workouts, or analyse your logs. Pick from current free models (or “Auto”), with a one-tap “Load current free models” button so the list never goes stale. It's the only feature that sends data off your device, and it explains exactly what's shared before you enable it; your key stays on this device and is never backed up.",
   "<b>Choose your heading font</b> — Settings → Preferences now has Modern, Bold and Classic styles. Modern (clean and legible) is the new default.",
   "<b>Routines (multi-day programs)</b> — build a plan like Push/Pull/Legs under Train → 📋 Programs, then start any day with one tap.",
   "<b>Progress photos</b> — a private photo timeline in Progress → Trends, stored only on this device and never uploaded or backed up.",
@@ -4835,6 +4881,11 @@ function renderMore(){
     const c=el("div"); c.style.marginTop="14px";
     c.innerHTML=`<div class="lrow" style="padding-top:0"><div class="ico">📜</div><div class="main"><div class="t">What's new</div><div class="s">Every update, from day one to now.</div></div></div>`;
     const cb=el("button","btn block","View changelog"); cb.style.marginTop="4px"; cb.addEventListener("click",openChangelog); c.appendChild(cb); body.appendChild(c);
+    const u=el("div"); u.style.marginTop="14px";
+    u.innerHTML=`<div class="lrow" style="padding-top:0"><div class="ico">🔄</div><div class="main"><div class="t">App updates</div><div class="s">Get the newest version. You'll also see a banner automatically when one's ready.</div></div></div>`;
+    const ub=el("button","btn block","Check for updates"); ub.style.marginTop="4px";
+    ub.addEventListener("click",()=>{ ub.textContent="Checking…"; ub.disabled=true; checkForUpdate(true); setTimeout(()=>{ub.textContent="Check for updates";ub.disabled=false;},2500); });
+    u.appendChild(ub); body.appendChild(u);
   }
 
   /* ---- DANGER ZONE ---- */
@@ -5119,8 +5170,51 @@ async function tryInstall(){
     <button class="btn str block" id="inst_ok" style="margin-top:16px">Got it</button>`);
   $("#inst_ok").addEventListener("click",closeModal);
 }
+/* ===================== APP UPDATES (in-app, no more close-twice dance) ===================== */
+let swReg=null, swRefreshing=false;
+function showUpdateBanner(worker){
+  if($("#updateBanner"))return; /* already showing */
+  const bar=el("div","update-banner"); bar.id="updateBanner";
+  bar.innerHTML=`<span>✨ A new version of Evolve is available.</span>
+    <button class="btn str sm" id="upd_now">Update</button>
+    <button class="upd-x" id="upd_x" title="Later">✕</button>`;
+  document.body.appendChild(bar);
+  $("#upd_now").addEventListener("click",()=>{
+    $("#upd_now").textContent="Updating…"; $("#upd_now").disabled=true;
+    if(worker) worker.postMessage("SKIP_WAITING"); else location.reload();
+  });
+  $("#upd_x").addEventListener("click",()=>bar.remove());
+}
+async function checkForUpdate(manual){
+  try{
+    if(!swReg) swReg = await navigator.serviceWorker.getRegistration();
+    if(!swReg){ if(manual)toast("Update check unavailable"); return; }
+    await swReg.update();
+    if(swReg.waiting){ showUpdateBanner(swReg.waiting); }
+    else if(manual) toast("You're on the latest version ✓");
+  }catch(e){ if(manual)toast("Couldn't check for updates"); }
+}
 if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+  /* when the controller changes (new SW activated), reload once to load fresh code */
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    if(swRefreshing)return; swRefreshing=true; window.location.reload();
+  });
+  window.addEventListener("load",async ()=>{
+    try{
+      swReg = await navigator.serviceWorker.register("sw.js");
+      /* a worker already waiting from a previous load */
+      if(swReg.waiting && navigator.serviceWorker.controller) showUpdateBanner(swReg.waiting);
+      /* a new worker installing now → show banner once it's ready */
+      swReg.addEventListener("updatefound",()=>{
+        const nw=swReg.installing; if(!nw)return;
+        nw.addEventListener("statechange",()=>{
+          if(nw.state==="installed" && navigator.serviceWorker.controller) showUpdateBanner(nw);
+        });
+      });
+    }catch(e){/* registration failed — app still works */}
+  });
+  /* check again whenever the app is brought back to the foreground */
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkForUpdate(false); });
 }
 
 /* keep number inputs from zooming weirdly handled by viewport; ready. */
