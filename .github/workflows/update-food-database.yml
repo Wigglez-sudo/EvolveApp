@@ -4,16 +4,32 @@ name: Update food database
 # into food-db/. Runs monthly, or on demand from the Actions tab.
 
 on:
+  workflow_dispatch:
+    inputs:
+      target_count:
+        description: "Total foods to aim for across all shops"
+        required: false
+        default: "8000"
+      max_pages_per_store:
+        description: "Max Open Food Facts pages per supermarket"
+        required: false
+        default: "80"
   schedule:
     - cron: "0 4 1 * *"   # 04:00 UTC on the 1st of each month
-  workflow_dispatch:        # manual "Run workflow" button
 
 permissions:
   contents: write
 
+concurrency:
+  group: evolve-food-db-update
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,9 +37,13 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Build food packs from Open Food Facts
+        env:
+          EVOLVE_FOOD_TARGET: ${{ github.event.inputs.target_count || '8000' }}
+          EVOLVE_FOOD_MAX_PAGES_PER_STORE: ${{ github.event.inputs.max_pages_per_store || '80' }}
+          EVOLVE_FOOD_USER_AGENT: "Evolve food database builder - https://github.com/Wigglez-sudo/EvolveAppTest"
         run: node tools/build-openfoodfacts-uk-db.js
 
       - name: Validate generated data
@@ -31,12 +51,13 @@ jobs:
 
       - name: Commit updated food database
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add food-db/
-          if git diff --staged --quiet; then
-            echo "No changes to the food database."
-          else
-            git commit -m "Update food database ($(date -u +%Y-%m-%d))"
-            git push
+          if git diff --quiet -- food-db/; then
+            echo "No food database changes to commit."
+            exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add food-db/
+          git commit -m "Update food database ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin main
+          git push
